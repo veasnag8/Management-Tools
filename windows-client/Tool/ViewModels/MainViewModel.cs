@@ -298,7 +298,9 @@ namespace Tool.ViewModels
 
                         if (episode.Status == EpisodeDownloadStatus.Completed)
                         {
+#pragma warning disable MVVMTK0034
                             Interlocked.Increment(ref _completedCount);
+#pragma warning restore MVVMTK0034
                             OnPropertyChanged(nameof(CompletedCount));
                         }
                     }

@@ -37,7 +37,6 @@ export interface License {
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  product?: Product;
   products?: Product;
   devices?: Device[];
   device_count?: number;
@@ -59,12 +58,6 @@ export interface Device {
   status: DeviceStatus;
   created_at: string;
   updated_at: string;
-  license?: License;
-  licenses?: License;
-}
-
-export interface DeviceWithLicense extends Device {
-  license?: License;
   licenses?: License;
 }
 
@@ -77,7 +70,6 @@ export interface ActivationLog {
   user_agent: string | null;
   metadata: any;
   created_at: string;
-  license?: License;
   licenses?: License;
 }
 
@@ -89,7 +81,6 @@ export interface LicenseLog {
   old_value: any;
   new_value: any;
   created_at: string;
-  profile?: UserProfile;
   profiles?: UserProfile;
 }
 
@@ -103,7 +94,6 @@ export interface ReleaseVersion {
   mandatory: boolean;
   active: boolean;
   created_at: string;
-  product?: Product;
   products?: Product;
 }
 

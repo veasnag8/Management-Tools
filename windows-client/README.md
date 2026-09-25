@@ -1,6 +1,6 @@
 # Windows Client Desktop Application (C# / .NET 8 WPF)
 
-SNA Pro — Streaming drama episode manager & batch downloader with licensing integration, DPAPI session security, and offline verification.
+KN 3in1 Pro — Streaming drama episode manager & batch downloader with licensing integration, DPAPI session security, and offline verification.
 
 ## Architecture
 

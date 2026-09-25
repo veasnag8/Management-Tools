@@ -6,7 +6,7 @@ VALUES
 (
     'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
     'TEST-TOOL',
-    'SNA Pro — Drama Stream Manager',
+    'KN 3in1 Pro — Drama Stream Manager',
     'Professional Desktop drama episode batch downloader & streaming client.',
     '1.0.0',
     'https://releases.example.com/TestTool-1.0.0-Setup.exe',

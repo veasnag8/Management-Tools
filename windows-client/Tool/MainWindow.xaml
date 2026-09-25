@@ -6,7 +6,7 @@
         xmlns:models="clr-namespace:Tool.Models"
         xmlns:converters="clr-namespace:Tool.Converters"
         mc:Ignorable="d"
-        Title="SNA Pro — Streaming Drama Manager &amp; Batch Downloader"
+        Title="KN 3in1 Pro — Streaming Drama Manager &amp; Batch Downloader"
         Height="820" Width="1360"
         MinHeight="700" MinWidth="1100"
         WindowStartupLocation="CenterScreen"
@@ -84,7 +84,7 @@
                         <TextBlock Text="⚡" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="SNA Pro" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" />
+                        <TextBlock Text="KN 3in1 Pro" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" />
                         <TextBlock Text="Drama Downloader Suite" FontSize="11" Foreground="#06B6D4" FontWeight="SemiBold" />
                     </StackPanel>
                 </StackPanel>
@@ -157,9 +157,9 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- --------------------------------------------------------------------- -->
+            <!-- ============================================================= -->
             <!-- LEFT PANEL: DRAMA LIBRARY -->
-            <!-- --------------------------------------------------------------------- -->
+            <!-- ============================================================= -->
             <Border Grid.Column="0" Background="#0F172A" Padding="16">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -216,9 +216,9 @@
             <!-- Column Splitter Divider -->
             <Rectangle Grid.Column="1" Fill="#334155" />
 
-            <!-- --------------------------------------------------------------------- -->
+            <!-- ============================================================= -->
             <!-- RIGHT PANEL: SELECTED SHOW & EPISODE WRAPPANEL -->
-            <!-- --------------------------------------------------------------------- -->
+            <!-- ============================================================= -->
             <Grid Grid.Column="2" Background="#0B1120" Margin="0">
                 <Grid.RowDefinitions>
                     <!-- Show Header & Save Picker -->
@@ -323,7 +323,7 @@
                                         </Border>
 
                                         <!-- Episode Title & Download Telemetry -->
-                                        <Grid Grid.Row="1" Padding="10,8">
+                                        <Border Grid.Row="1" Padding="10,8">
                                             <StackPanel VerticalAlignment="Center">
                                                 <DockPanel>
                                                     <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Bold" Foreground="#FFFFFF" DockPanel.Dock="Left" />
@@ -341,7 +341,7 @@
                                                     <TextBlock Text="{Binding Progress, StringFormat='{}{0:F0}%'}" FontSize="10" FontWeight="Bold" Foreground="#CBD5E1" HorizontalAlignment="Right" />
                                                 </DockPanel>
                                             </StackPanel>
-                                        </Grid>
+                                        </Border>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
