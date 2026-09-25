@@ -1,0 +1,26 @@
+{
+  "name": "license-platform-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-ready Windows EXE License Management System and Downloader",
+  "workspaces": [
+    "admin",
+    "worker"
+  ],
+  "scripts": {
+    "dev:admin": "npm run dev --workspace=admin",
+    "dev:worker": "npm run dev --workspace=worker",
+    "build:admin": "npm run build --workspace=admin",
+    "build:worker": "npm run build --workspace=worker",
+    "deploy:worker": "npm run deploy --workspace=worker"
+  },
+  "keywords": [
+    "licensing",
+    "wpf",
+    "nextjs",
+    "cloudflare-worker",
+    "supabase"
+  ],
+  "author": "veasnag8",
+  "license": "MIT"
+}

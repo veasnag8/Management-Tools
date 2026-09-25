@@ -11,6 +11,8 @@ dist/
 .env.local
 .env.production
 .env.development
+.dev.vars
+worker/.dev.vars
 
 # .NET & Visual Studio
 bin/

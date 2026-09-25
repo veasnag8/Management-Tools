@@ -1,0 +1,10 @@
+name = "license-api"
+main = "src/index.ts"
+compatibility_date = "2024-03-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+SUPABASE_URL = "https://kscfelnxuavwkcyqwvsk.supabase.co"
+WORKER_HMAC_SECRET = "b6e3f89a74c10294857d19e830c24f61e8947b19485d928374a5e6f1c2d3b4a5"
+
+# Run wrangler secret put SUPABASE_SERVICE_ROLE_KEY to set in production
