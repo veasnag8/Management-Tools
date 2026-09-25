@@ -1,15 +1,16 @@
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
-interface ConfirmationModalProps {
+export interface ConfirmationModalProps {
   isOpen: boolean;
   title: string;
   message: string;
   confirmText?: string;
+  variant?: 'danger' | 'warning' | 'primary';
   confirmVariant?: 'danger' | 'warning' | 'primary';
   isLoading?: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void;
 }
 
 export function ConfirmationModal({
@@ -17,12 +18,15 @@ export function ConfirmationModal({
   title,
   message,
   confirmText = 'Confirm',
+  variant,
   confirmVariant = 'danger',
   isLoading = false,
   onConfirm,
   onCancel,
 }: ConfirmationModalProps) {
   if (!isOpen) return null;
+
+  const actualVariant = variant || confirmVariant;
 
   const variantStyles = {
     danger: 'bg-rose-600 hover:bg-rose-700 text-white',
@@ -31,37 +35,41 @@ export function ConfirmationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-md overflow-hidden">
         <div className="p-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-800">
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+              <div className="p-2 bg-amber-500/10 text-amber-400 rounded-lg">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+              <h3 className="text-base font-bold text-white">{title}</h3>
             </div>
-            <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 p-1">
-              <X className="w-5 h-5" />
-            </button>
+            {onCancel && (
+              <button onClick={onCancel} className="text-slate-400 hover:text-white p-1 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
-          <div className="py-4 text-sm text-slate-600 leading-relaxed">{message}</div>
+          <div className="py-4 text-sm text-slate-300 leading-relaxed">{message}</div>
 
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={isLoading}
-              className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
-            >
-              Cancel
-            </button>
+          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={isLoading}
+                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white bg-slate-800 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            )}
             <button
               type="button"
               onClick={onConfirm}
               disabled={isLoading}
-              className={`px-4 py-2 text-sm font-medium rounded-lg ${variantStyles[confirmVariant]}`}
+              className={`px-4 py-2 text-xs font-semibold rounded-xl transition-colors ${variantStyles[actualVariant]}`}
             >
               {isLoading ? 'Processing...' : confirmText}
             </button>
@@ -71,3 +79,5 @@ export function ConfirmationModal({
     </div>
   );
 }
+
+export default ConfirmationModal;
