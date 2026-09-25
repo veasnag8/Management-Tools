@@ -1,0 +1,27 @@
+# Node
+node_modules/
+.next/
+out/
+build/
+dist/
+.wrangler/
+
+# Environment
+.env
+.env.local
+.env.production
+.env.development
+
+# .NET & Visual Studio
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+Output/
+
+# OS
+Thumbs.db
+.DS_Store
+*.log
