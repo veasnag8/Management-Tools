@@ -48,7 +48,7 @@ namespace Tool.License
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
 
-        public LicenseApiClient(string baseUrl = "http://localhost:8787", HttpClient? customClient = null)
+        public LicenseApiClient(string baseUrl = "https://license-api.veasnag8.workers.dev", HttpClient? customClient = null)
         {
             _baseUrl = baseUrl.TrimEnd('/');
             _httpClient = customClient ?? new HttpClient
@@ -127,7 +127,8 @@ namespace Tool.License
                 var url = $"{_baseUrl}/v1/version?product={Uri.EscapeDataString(productCode)}&current_version={Uri.EscapeDataString(currentVersion)}";
                 using var response = await _httpClient.GetAsync(url, ct);
                 var json = await response.Content.ReadAsStringAsync(ct);
-                return JsonSerializer.Deserialize<ApiResponse<VersionResponseData>>(json)
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                return JsonSerializer.Deserialize<ApiResponse<VersionResponseData>>(json, options)
                     ?? new ApiResponse<VersionResponseData> { Success = false, Error = new ApiError { Code = "DESERIALIZE_ERROR", Message = "Malformed server response." } };
             }
             catch (Exception ex)
@@ -168,10 +169,14 @@ namespace Tool.License
                     {
                         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                         var result = JsonSerializer.Deserialize<ApiResponse<TRes>>(content, options);
-                        if (result != null && (result.Success || result.Error != null)) return result;
+                        if (result != null && (result.Success || result.Error != null))
+                        {
+                            return result;
+                        }
                     }
                     catch
                     {
+                        // Fallback parser for unstructured JSON (e.g., {"error": "..."})
                         try
                         {
                             using var doc = JsonDocument.Parse(content);
@@ -228,7 +233,7 @@ namespace Tool.License
                 return new ApiResponse<TRes>
                 {
                     Success = false,
-                    Error = new ApiError { Code = "TIMEOUT", Message = "Request timed out." }
+                    Error = new ApiError { Code = "TIMEOUT", Message = "Request timed out. Please check your internet connection." }
                 };
             }
             catch (Exception ex)
