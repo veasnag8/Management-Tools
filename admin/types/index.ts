@@ -63,6 +63,11 @@ export interface Device {
   licenses?: License;
 }
 
+export interface DeviceWithLicense extends Device {
+  license?: License;
+  licenses?: License;
+}
+
 export interface ActivationLog {
   id: string;
   license_id: string | null;

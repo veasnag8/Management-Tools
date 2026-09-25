@@ -68,15 +68,15 @@ export function exportToCsv(filename: string, rows: Record<string, any>[]) {
   const headers = Object.keys(rows[0]);
   const csvContent = [
     headers.join(','),
-    ...rows.map((row) =>
+    ...rows.map(row =>
       headers
-        .map((h) => {
+        .map(h => {
           let val = row[h] === null || row[h] === undefined ? '' : String(row[h]);
           val = val.replace(/"/g, '""');
           return `"${val}"`;
         })
         .join(',')
-    ),
+    )
   ].join('\r\n');
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
