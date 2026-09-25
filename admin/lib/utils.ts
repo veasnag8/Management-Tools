@@ -29,6 +29,23 @@ export function formatShortDate(dateString: string | null | undefined): string {
   });
 }
 
+export function formatRelativeTime(dateString: string | null | undefined): string {
+  if (!dateString) return 'Never';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return 'Invalid date';
+  const now = new Date();
+  const diffSeconds = Math.floor((now.getTime() - d.getTime()) / 1000);
+
+  if (diffSeconds < 60) return 'Just now';
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return formatDate(dateString);
+}
+
 export function maskLicenseKey(key: string): string {
   if (!key || key.length < 8) return '****';
   const parts = key.split('-');
@@ -51,15 +68,15 @@ export function exportToCsv(filename: string, rows: Record<string, any>[]) {
   const headers = Object.keys(rows[0]);
   const csvContent = [
     headers.join(','),
-    ...rows.map(row =>
+    ...rows.map((row) =>
       headers
-        .map(h => {
+        .map((h) => {
           let val = row[h] === null || row[h] === undefined ? '' : String(row[h]);
           val = val.replace(/"/g, '""');
           return `"${val}"`;
         })
         .join(',')
-    )
+    ),
   ].join('\r\n');
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

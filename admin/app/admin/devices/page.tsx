@@ -7,7 +7,7 @@ import ConfirmationModal from '@/components/ConfirmationModal';
 import { formatDate, formatRelativeTime } from '@/lib/utils';
 import Link from 'next/link';
 
-interface DeviceWithLicense extends Device {
+interface DeviceWithLicense extends Omit<Device, 'license'> {
   license?: {
     id: string;
     license_key: string;
