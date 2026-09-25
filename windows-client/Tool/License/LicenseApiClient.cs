@@ -48,7 +48,7 @@ namespace Tool.License
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
 
-        public LicenseApiClient(string baseUrl = "https://license-api.veasnag8.workers.dev", HttpClient? customClient = null)
+        public LicenseApiClient(string baseUrl = "http://localhost:8787", HttpClient? customClient = null)
         {
             _baseUrl = baseUrl.TrimEnd('/');
             _httpClient = customClient ?? new HttpClient
@@ -164,8 +164,53 @@ namespace Tool.License
 
                 if (!string.IsNullOrWhiteSpace(content))
                 {
-                    var result = JsonSerializer.Deserialize<ApiResponse<TRes>>(content);
-                    if (result != null) return result;
+                    try
+                    {
+                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                        var result = JsonSerializer.Deserialize<ApiResponse<TRes>>(content, options);
+                        if (result != null && (result.Success || result.Error != null)) return result;
+                    }
+                    catch
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(content);
+                            var root = doc.RootElement;
+                            string errorMsg = "Server error occurred.";
+                            string errorCode = $"HTTP_{(int)response.StatusCode}";
+
+                            if (root.TryGetProperty("error", out var errProp))
+                            {
+                                if (errProp.ValueKind == JsonValueKind.String)
+                                {
+                                    errorMsg = errProp.GetString() ?? errorMsg;
+                                }
+                                else if (errProp.ValueKind == JsonValueKind.Object)
+                                {
+                                    if (errProp.TryGetProperty("message", out var m)) errorMsg = m.GetString() ?? errorMsg;
+                                    if (errProp.TryGetProperty("code", out var c)) errorCode = c.GetString() ?? errorCode;
+                                }
+                            }
+                            else if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
+                            {
+                                errorMsg = msgProp.GetString() ?? errorMsg;
+                            }
+
+                            return new ApiResponse<TRes>
+                            {
+                                Success = false,
+                                Error = new ApiError { Code = errorCode, Message = errorMsg }
+                            };
+                        }
+                        catch
+                        {
+                            return new ApiResponse<TRes>
+                            {
+                                Success = false,
+                                Error = new ApiError { Code = $"HTTP_{(int)response.StatusCode}", Message = content }
+                            };
+                        }
+                    }
                 }
 
                 return new ApiResponse<TRes>
