@@ -3,7 +3,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Tool.Updates;
@@ -48,7 +47,7 @@ namespace Tool.License
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
 
-        public LicenseApiClient(string baseUrl = "https://license-api.veasnag8.workers.dev", HttpClient? customClient = null)
+        public LicenseApiClient(string baseUrl = "http://localhost:8787", HttpClient? customClient = null)
         {
             _baseUrl = baseUrl.TrimEnd('/');
             _httpClient = customClient ?? new HttpClient
@@ -127,8 +126,7 @@ namespace Tool.License
                 var url = $"{_baseUrl}/v1/version?product={Uri.EscapeDataString(productCode)}&current_version={Uri.EscapeDataString(currentVersion)}";
                 using var response = await _httpClient.GetAsync(url, ct);
                 var json = await response.Content.ReadAsStringAsync(ct);
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                return JsonSerializer.Deserialize<ApiResponse<VersionResponseData>>(json, options)
+                return JsonSerializer.Deserialize<ApiResponse<VersionResponseData>>(json)
                     ?? new ApiResponse<VersionResponseData> { Success = false, Error = new ApiError { Code = "DESERIALIZE_ERROR", Message = "Malformed server response." } };
             }
             catch (Exception ex)
@@ -165,57 +163,8 @@ namespace Tool.License
 
                 if (!string.IsNullOrWhiteSpace(content))
                 {
-                    try
-                    {
-                        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                        var result = JsonSerializer.Deserialize<ApiResponse<TRes>>(content, options);
-                        if (result != null && (result.Success || result.Error != null))
-                        {
-                            return result;
-                        }
-                    }
-                    catch
-                    {
-                        // Fallback parser for unstructured JSON (e.g., {"error": "..."})
-                        try
-                        {
-                            using var doc = JsonDocument.Parse(content);
-                            var root = doc.RootElement;
-                            string errorMsg = "Server error occurred.";
-                            string errorCode = $"HTTP_{(int)response.StatusCode}";
-
-                            if (root.TryGetProperty("error", out var errProp))
-                            {
-                                if (errProp.ValueKind == JsonValueKind.String)
-                                {
-                                    errorMsg = errProp.GetString() ?? errorMsg;
-                                }
-                                else if (errProp.ValueKind == JsonValueKind.Object)
-                                {
-                                    if (errProp.TryGetProperty("message", out var m)) errorMsg = m.GetString() ?? errorMsg;
-                                    if (errProp.TryGetProperty("code", out var c)) errorCode = c.GetString() ?? errorCode;
-                                }
-                            }
-                            else if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
-                            {
-                                errorMsg = msgProp.GetString() ?? errorMsg;
-                            }
-
-                            return new ApiResponse<TRes>
-                            {
-                                Success = false,
-                                Error = new ApiError { Code = errorCode, Message = errorMsg }
-                            };
-                        }
-                        catch
-                        {
-                            return new ApiResponse<TRes>
-                            {
-                                Success = false,
-                                Error = new ApiError { Code = $"HTTP_{(int)response.StatusCode}", Message = content }
-                            };
-                        }
-                    }
+                    var result = JsonSerializer.Deserialize<ApiResponse<TRes>>(content);
+                    if (result != null) return result;
                 }
 
                 return new ApiResponse<TRes>
@@ -233,7 +182,7 @@ namespace Tool.License
                 return new ApiResponse<TRes>
                 {
                     Success = false,
-                    Error = new ApiError { Code = "TIMEOUT", Message = "Request timed out. Please check your internet connection." }
+                    Error = new ApiError { Code = "TIMEOUT", Message = "Request timed out." }
                 };
             }
             catch (Exception ex)

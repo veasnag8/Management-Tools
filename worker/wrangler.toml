@@ -5,6 +5,6 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 SUPABASE_URL = "https://kscfelnxuavwkcyqwvsk.supabase.co"
-WORKER_HMAC_SECRET = "b6e3f89a74c10294857d19e830c24f61e8947b19485d928374a5e6f1c2d3b4a5"
-
-# Run wrangler secret put SUPABASE_SERVICE_ROLE_KEY to set in production
+ENVIRONMENT = "production"
+JWT_SECRET = "b6e3f89a74c10294857d19e830c24f61e8947b19485d928374a5e6f1c2d3b4a5"
+LICENSE_SIGNING_KEY = "c7e4f90b85d21305968e20f941d35a72f9058c20596e039485b6f7a2d3e4c5b6"
