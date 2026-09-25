@@ -1,7 +1,7 @@
 ; Script generated for Inno Setup 6
-; Software Licensing Platform & KN 3in1 Pro Windows Installer
+; Software Licensing Platform & SNA Pro Windows Installer
 
-#define MyAppName "KN 3in1 Pro - Drama Manager"
+#define MyAppName "SNA Pro - Drama Manager"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "License Platform Technologies"
 #define MyAppURL "https://example.com"

@@ -242,7 +242,7 @@ export default function ProductsPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. KN 3in1 Pro Drama Downloader"
+                  placeholder="e.g. SNA Pro Drama Downloader"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white"
