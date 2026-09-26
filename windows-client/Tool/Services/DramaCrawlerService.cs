@@ -114,7 +114,9 @@ namespace Tool.Services
 
             for (int i = 1; i <= episodeCount; i++)
             {
-                var durationStr = $"{43 + (i % 6)}m {15 + (i * 11) % 44:D2}s";
+                var durationStr = detectedPlatform == PlatformType.HongGuo
+                    ? $"01m {random.Next(20, 58):D2}s"
+                    : $"{random.Next(38, 52)}m {random.Next(10, 59):D2}s";
 
                 var streamUrl = urlOrAlbumId.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !urlOrAlbumId.Contains(".m3u8")
                     ? urlOrAlbumId
@@ -339,7 +341,7 @@ namespace Tool.Services
                         {
                             EpisodeNumber = ep,
                             Title = $"EP{ep:D2}",
-                            Duration = $"{43 + (ep % 6)}m {15 + (ep * 11) % 44:D2}s",
+                            Duration = $"01m {20 + (ep * 7) % 38:D2}s",
                             ThumbnailUrl = cover,
                             StreamUrl = $"https://stream.hongguo.com/video/{drama.Id}/ep_{ep}.m3u8",
                             IsSelected = true
