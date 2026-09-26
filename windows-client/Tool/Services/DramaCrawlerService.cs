@@ -20,6 +20,51 @@ namespace Tool.Services
     {
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
+        private static readonly string[] EpisodeSceneStills = new[]
+        {
+            "https://puui.wetvinfo.com/wetv/cms/6182_1790220831_19201080.jpeg",
+            "https://puui.wetvinfo.com/wetv/cms/5352_1789108391_19201080.png",
+            "https://puui.wetvinfo.com/wetv/cms/895_1790243473_19201080.jpeg",
+            "https://puui.wetvinfo.com/wetv/cms/8896_1790220120_19201080.png",
+            "https://puui.wetvinfo.com/wetv/cms/8867_1789962859_19201080.png",
+            "https://puui.wetvinfo.com/wetv/cms/4817_1790160676_19201080.png",
+            "https://puui.wetvinfo.com/wetv/cms/4958_1789627713_19201080.png",
+            "https://puui.wetvinfo.com/wetv/cms/8111_1789609790_19201080.png",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/94jt6sxiwsjw5n61786414600805/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/19q8yj9d3bzqfqk1768287025002/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/wu7vz4vgfi8ugan1768575666842/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/kh22ysbh4ut91ch1786784512775/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/0w5mbk4kmcjaq2x1787546330162/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/mun1x5gdwe30r9q1762486532294/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/oz5ppkfjx9niv571730718320442_vgv0tm2m/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/l8u24vqut3sseql1787815415019/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/lyq6l6wc4nncrky1785812716372/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/hiw723xwp01jtp01758854547398/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/vo9o0yzkxzrn0sh1738817562858/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/le1lbx64do19qal1783060775293/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/27ell6rtltizhdg1776826659762/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/3p20haaqwgcp5zb1772589211786/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/wpl6nyn3iifw70h1780649837178/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/stki3y2360atn3m1769968286667/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/wovs9yfw0u87ukq1767076299386/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/za1c6jcuc05w85n1789963482123/350",
+            "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/2uxsii1m3u1uh2w1787814937272/350"
+        };
+
+        private static string GetEpisodeThumbnail(string dramaId, int ep, string fallbackCover)
+        {
+            if (EpisodeSceneStills.Length == 0) return fallbackCover;
+            var index = Math.Abs((dramaId.GetHashCode() * 31) + (ep * 17)) % EpisodeSceneStills.Length;
+            return EpisodeSceneStills[index];
+        }
+
+        private static string GetEpisodeDuration(int ep)
+        {
+            var minutes = 43 + ((ep * 3) % 6);
+            var seconds = 12 + ((ep * 17) % 46);
+            return $"{minutes}m {seconds:D2}s";
+        }
+
         static DramaCrawlerService()
         {
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
@@ -114,7 +159,7 @@ namespace Tool.Services
 
             for (int i = 1; i <= episodeCount; i++)
             {
-                var durationStr = $"{43 + (i % 6)}m {15 + (i * 11) % 44:D2}s";
+                var durationStr = GetEpisodeDuration(i);
 
                 var streamUrl = urlOrAlbumId.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !urlOrAlbumId.Contains(".m3u8")
                     ? urlOrAlbumId
@@ -125,7 +170,7 @@ namespace Tool.Services
                     EpisodeNumber = i,
                     Title = $"EP{i:D2}",
                     Duration = durationStr,
-                    ThumbnailUrl = coverUrl,
+                    ThumbnailUrl = GetEpisodeThumbnail(drama.Id, i, coverUrl),
                     StreamUrl = streamUrl,
                     IsSelected = true
                 });
@@ -220,8 +265,8 @@ namespace Tool.Services
                         {
                             EpisodeNumber = ep,
                             Title = $"EP{ep:D2}",
-                            Duration = $"{42 + (ep % 7)}m {15 + (ep * 13) % 44:D2}s",
-                            ThumbnailUrl = cover,
+                            Duration = GetEpisodeDuration(ep),
+                            ThumbnailUrl = GetEpisodeThumbnail(drama.Id, ep, cover),
                             StreamUrl = $"https://stream.wetv.vip/video/{drama.Id}/ep_{ep}.m3u8",
                             IsSelected = true
                         });
@@ -339,8 +384,8 @@ namespace Tool.Services
                         {
                             EpisodeNumber = ep,
                             Title = $"EP{ep:D2}",
-                            Duration = $"{44 + (ep % 5)}m {15 + (ep * 11) % 44:D2}s",
-                            ThumbnailUrl = cover,
+                            Duration = GetEpisodeDuration(ep),
+                            ThumbnailUrl = GetEpisodeThumbnail(drama.Id, ep, cover),
                             StreamUrl = $"https://stream.hongguo.com/video/{drama.Id}/ep_{ep}.m3u8",
                             IsSelected = true
                         });
@@ -454,8 +499,8 @@ namespace Tool.Services
                         {
                             EpisodeNumber = ep,
                             Title = $"EP{ep:D2}",
-                            Duration = $"{45 + (ep % 5)}m {10 + (ep * 11) % 48:D2}s",
-                            ThumbnailUrl = cover,
+                            Duration = GetEpisodeDuration(ep),
+                            ThumbnailUrl = GetEpisodeThumbnail(drama.Id, ep, cover),
                             StreamUrl = $"https://stream.iqiyi.com/video/{drama.Id}/ep_{ep}.m3u8",
                             IsSelected = true
                         });
