@@ -7,7 +7,7 @@
         xmlns:converters="clr-namespace:Tool.Converters"
         mc:Ignorable="d"
         Title="SNA Pro — Streaming Drama Manager &amp; Batch Downloader"
-        Height="860" Width="1380"
+        Height="880" Width="1400"
         MinHeight="720" MinWidth="1100"
         WindowStartupLocation="CenterScreen"
         Background="#080E1A"
@@ -95,7 +95,7 @@
             <RowDefinition Height="Auto" />
             <!-- 3. Toolbar & Filter Row -->
             <RowDefinition Height="Auto" />
-            <!-- 4. Main Library View (Poster Grid or List) -->
+            <!-- 4. Main Library View (24 Posters Grid per Page) -->
             <RowDefinition Height="*" />
             <!-- 5. Bottom Status & Overall Controls -->
             <RowDefinition Height="Auto" />
@@ -238,7 +238,7 @@
         </Border>
 
         <!-- ========================================================================= -->
-        <!-- 3. TOOLBAR / FILTER HEADER ROW (DRAMA LIBRARY + 176910 Shows) -->
+        <!-- 3. TOOLBAR / FILTER HEADER ROW (DRAMA LIBRARY + Real Sync Badge) -->
         <!-- ========================================================================= -->
         <Border Grid.Row="2" Background="#080E1A" Padding="20,14,20,10">
             <Grid>
@@ -253,7 +253,7 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="DRAMA LIBRARY" FontSize="14" FontWeight="Black" Foreground="#64748B" VerticalAlignment="Center" Margin="0,0,16,0" />
 
-                    <!-- The 176910 Shows Cyan Pill Badge -->
+                    <!-- The Real Synced Shows Badge -->
                     <Border Background="#083344" BorderBrush="#06B6D4" BorderThickness="1.5" CornerRadius="12" Padding="14,4" VerticalAlignment="Center">
                         <TextBlock Text="{Binding TotalShowsBadge}" FontSize="13" FontWeight="Bold" Foreground="#00E5FF" />
                     </Border>
@@ -308,13 +308,20 @@
         </Border>
 
         <!-- ========================================================================= -->
-        <!-- 4. MAIN DRAMA POSTERS GRID -->
+        <!-- 4. MAIN DRAMA POSTERS GRID WITH PAGINATION (24 CARDS PER PAGE) -->
         <!-- ========================================================================= -->
         <Grid Grid.Row="3">
-            <!-- POSTER GRID VIEW (Supports dozens of drama cards smoothly) -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,4,16,16"
+            <Grid.RowDefinitions>
+                <!-- Posters Scroll Area -->
+                <RowDefinition Height="*" />
+                <!-- Pagination Footer Bar -->
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- POSTER GRID VIEW (Shows 24 items of PagedDramaLibrary) -->
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Padding="16,4,16,10"
                           Visibility="{Binding IsPosterView, Converter={StaticResource BoolToVisConverter}}">
-                <ItemsControl ItemsSource="{Binding FilteredDramaLibrary}">
+                <ItemsControl ItemsSource="{Binding PagedDramaLibrary}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left" />
@@ -322,13 +329,13 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Button Style="{StaticResource PosterCardButtonStyle}" Width="225" Margin="8,8,12,16"
+                            <Button Style="{StaticResource PosterCardButtonStyle}" Width="215" Margin="6,6,10,14"
                                     Command="{Binding DataContext.SelectDramaCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                     CommandParameter="{Binding}">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <!-- Poster Image with Overlays -->
-                                        <RowDefinition Height="285" />
+                                        <RowDefinition Height="270" />
                                         <!-- Drama Title -->
                                         <RowDefinition Height="Auto" />
                                         <!-- Genre Tags -->
@@ -345,11 +352,11 @@
                                             <Button Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     CommandParameter="{Binding}"
                                                     HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
-                                                    Background="#80000000" BorderThickness="0" Width="32" Height="32" Cursor="Hand">
+                                                    Background="#80000000" BorderThickness="0" Width="30" Height="30" Cursor="Hand">
                                                 <Button.Resources>
-                                                    <Style TargetType="Border"><Setter Property="CornerRadius" Value="16" /></Style>
+                                                    <Style TargetType="Border"><Setter Property="CornerRadius" Value="15" /></Style>
                                                 </Button.Resources>
-                                                <TextBlock FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
                                                             <Setter Property="Text" Value="☆" />
@@ -366,16 +373,16 @@
                                             </Button>
 
                                             <!-- Bottom-Right Episode Count Badge (全40集, 全46集, 全42集, etc.) -->
-                                            <Border Background="#E6000000" CornerRadius="5" Padding="8,3"
-                                                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8">
-                                                <TextBlock Text="{Binding EpisodeBadge}" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF" />
+                                            <Border Background="#E6000000" CornerRadius="5" Padding="7,3"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,6,6">
+                                                <TextBlock Text="{Binding EpisodeBadge}" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" />
                                             </Border>
                                         </Grid>
                                     </Border>
 
                                     <!-- 2. DRAMA CHINESE TITLE -->
                                     <TextBlock Grid.Row="1" Text="{Binding Title}" FontSize="14" FontWeight="Bold" Foreground="#FFFFFF"
-                                               Margin="0,10,0,6" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                               Margin="0,8,0,4" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
 
                                     <!-- 3. GENRE TAG PILLS (剧情, 乡村, 恋爱, 逆袭, 都市, etc.) -->
                                     <ItemsControl Grid.Row="2" ItemsSource="{Binding Tags}">
@@ -387,7 +394,7 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border Background="#162A45" BorderBrush="#1E3E66" BorderThickness="1"
-                                                        CornerRadius="4" Padding="7,2" Margin="0,0,6,0">
+                                                        CornerRadius="4" Padding="6,2" Margin="0,0,5,0">
                                                     <TextBlock Text="{Binding}" FontSize="10" Foreground="#7DD3FC" FontWeight="SemiBold" />
                                                 </Border>
                                             </DataTemplate>
@@ -401,7 +408,7 @@
             </ScrollViewer>
 
             <!-- LIST VIEW FALLBACK -->
-            <ListView ItemsSource="{Binding FilteredDramaLibrary}" Background="Transparent" BorderThickness="0"
+            <ListView Grid.Row="0" ItemsSource="{Binding PagedDramaLibrary}" Background="Transparent" BorderThickness="0"
                       Visibility="{Binding IsPosterView, Converter={StaticResource InverseBoolToVisConverter}}" Padding="20">
                 <ListView.ItemTemplate>
                     <DataTemplate>
@@ -430,10 +437,44 @@
                 </ListView.ItemTemplate>
             </ListView>
 
+            <!-- PAGINATION BAR (Previous Page / Page Info / Next Page) -->
+            <Border Grid.Row="1" Background="#0A1424" BorderBrush="#16253B" BorderThickness="0,1,0,0" Padding="20,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Previous Page Button -->
+                    <Button Grid.Column="0" Command="{Binding PreviousPageCommand}" IsEnabled="{Binding CanGoToPreviousPage}"
+                            Height="34" Padding="16,0" Background="#1E2E4A" Foreground="#FFFFFF" FontSize="12" FontWeight="Bold"
+                            BorderThickness="0" Cursor="Hand">
+                        <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="6" /></Style></Button.Resources>
+                        <TextBlock Text="◀ Previous Page" />
+                    </Button>
+
+                    <!-- Page Info Center -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border Background="#0E1B33" BorderBrush="#1E2E4A" BorderThickness="1" CornerRadius="8" Padding="16,6">
+                            <TextBlock Text="{Binding PageInfoText}" FontSize="12" FontWeight="Bold" Foreground="#38BDF8" />
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Next Page Button -->
+                    <Button Grid.Column="2" Command="{Binding NextPageCommand}" IsEnabled="{Binding CanGoToNextPage}"
+                            Height="34" Padding="16,0" Background="#2563EB" Foreground="#FFFFFF" FontSize="12" FontWeight="Bold"
+                            BorderThickness="0" Cursor="Hand">
+                        <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="6" /></Style></Button.Resources>
+                        <TextBlock Text="Next Page ▶" />
+                    </Button>
+                </Grid>
+            </Border>
+
             <!-- ========================================================================= -->
             <!-- 5. INTERACTIVE EPISODE DOWNLOADER DRAWER / MODAL OVERLAY -->
             <!-- ========================================================================= -->
-            <Grid Background="#B3000000" Visibility="{Binding IsEpisodeDrawerOpen, Converter={StaticResource BoolToVisConverter}}">
+            <Grid Grid.Row="0" Grid.RowSpan="2" Background="#B3000000" Visibility="{Binding IsEpisodeDrawerOpen, Converter={StaticResource BoolToVisConverter}}">
                 <Border Background="#0B1628" BorderBrush="#1E3A8A" BorderThickness="2" CornerRadius="16"
                         Width="1080" Height="700" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24">
                     <Grid>
