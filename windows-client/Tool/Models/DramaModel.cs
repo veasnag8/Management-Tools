@@ -16,7 +16,7 @@ namespace Tool.Models
         private string _chineseTitle = string.Empty;
 
         [ObservableProperty]
-        private string _coverUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600";
+        private string _coverUrl = "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/94jt6sxiwsjw5n61786414600805/350";
 
         [ObservableProperty]
         private string _resolution = "1080p FHD";
