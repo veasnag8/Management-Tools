@@ -48,9 +48,7 @@ namespace Tool.License
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
 
-        public const string DefaultBaseUrl = "https://license-api.veasnag8.workers.dev";
-
-        public LicenseApiClient(string baseUrl = DefaultBaseUrl, HttpClient? customClient = null)
+        public LicenseApiClient(string baseUrl = "http://localhost:8787", HttpClient? customClient = null)
         {
             _baseUrl = baseUrl.TrimEnd('/');
             _httpClient = customClient ?? new HttpClient
@@ -129,8 +127,7 @@ namespace Tool.License
                 var url = $"{_baseUrl}/v1/version?product={Uri.EscapeDataString(productCode)}&current_version={Uri.EscapeDataString(currentVersion)}";
                 using var response = await _httpClient.GetAsync(url, ct);
                 var json = await response.Content.ReadAsStringAsync(ct);
-                return JsonSerializer.Deserialize<ApiResponse<VersionResponseData>>(json)
-                    ?? new ApiResponse<VersionResponseData> { Success = false, Error = new ApiError { Code = "DESERIALIZE_ERROR", Message = "Malformed server response." } };
+                return ParseResponse<VersionResponseData>(json, (int)response.StatusCode);
             }
             catch (Exception ex)
             {
@@ -164,21 +161,7 @@ namespace Tool.License
                 using var response = await _httpClient.SendAsync(request, ct);
                 var content = await response.Content.ReadAsStringAsync(ct);
 
-                if (!string.IsNullOrWhiteSpace(content))
-                {
-                    var result = JsonSerializer.Deserialize<ApiResponse<TRes>>(content);
-                    if (result != null) return result;
-                }
-
-                return new ApiResponse<TRes>
-                {
-                    Success = false,
-                    Error = new ApiError
-                    {
-                        Code = $"HTTP_{(int)response.StatusCode}",
-                        Message = $"Server returned HTTP status {(int)response.StatusCode}"
-                    }
-                };
+                return ParseResponse<TRes>(content, (int)response.StatusCode);
             }
             catch (TaskCanceledException)
             {
@@ -194,6 +177,79 @@ namespace Tool.License
                 {
                     Success = false,
                     Error = new ApiError { Code = "NETWORK_ERROR", Message = ex.Message }
+                };
+            }
+        }
+
+        private static ApiResponse<TRes> ParseResponse<TRes>(string content, int httpStatusCode)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return new ApiResponse<TRes>
+                {
+                    Success = httpStatusCode >= 200 && httpStatusCode < 300,
+                    Error = httpStatusCode >= 200 && httpStatusCode < 300 ? null : new ApiError { Code = $"HTTP_{httpStatusCode}", Message = $"Server returned HTTP status {httpStatusCode}" }
+                };
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(content);
+                var root = doc.RootElement;
+
+                bool success = false;
+                if (root.TryGetProperty("success", out var successProp))
+                {
+                    success = successProp.ValueKind == JsonValueKind.True;
+                }
+                else if (httpStatusCode >= 200 && httpStatusCode < 300)
+                {
+                    success = true;
+                }
+
+                TRes? data = default;
+                if (root.TryGetProperty("data", out var dataProp) && dataProp.ValueKind != JsonValueKind.Null && dataProp.ValueKind != JsonValueKind.Undefined)
+                {
+                    data = JsonSerializer.Deserialize<TRes>(dataProp.GetRawText());
+                }
+
+                ApiError? error = null;
+                if (root.TryGetProperty("error", out var errorProp))
+                {
+                    if (errorProp.ValueKind == JsonValueKind.Object)
+                    {
+                        var code = errorProp.TryGetProperty("code", out var c) ? c.GetString() ?? "UNKNOWN" : "UNKNOWN";
+                        var msg = errorProp.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
+                        error = new ApiError { Code = code, Message = msg };
+                    }
+                    else if (errorProp.ValueKind == JsonValueKind.String)
+                    {
+                        error = new ApiError { Code = $"HTTP_{httpStatusCode}", Message = errorProp.GetString() ?? "Server error" };
+                    }
+                }
+                else if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
+                {
+                    error = new ApiError { Code = $"HTTP_{httpStatusCode}", Message = msgProp.GetString() ?? "Server error" };
+                }
+
+                if (!success && error == null)
+                {
+                    error = new ApiError { Code = $"HTTP_{httpStatusCode}", Message = $"Server returned HTTP status {httpStatusCode}" };
+                }
+
+                return new ApiResponse<TRes>
+                {
+                    Success = success,
+                    Data = data,
+                    Error = error
+                };
+            }
+            catch
+            {
+                return new ApiResponse<TRes>
+                {
+                    Success = false,
+                    Error = new ApiError { Code = $"HTTP_{httpStatusCode}", Message = content }
                 };
             }
         }
