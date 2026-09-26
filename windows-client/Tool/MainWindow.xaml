@@ -85,6 +85,107 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Dark ComboBox Item Style -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="#0A1424" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" Margin="1" CornerRadius="6">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1E3A8A" />
+                                <Setter Property="Foreground" Value="#00E5FF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#0284C7" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Dark ComboBox Style -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#0E1B33" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#1E2E4A" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Focusable="False"
+                                          IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Border" Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="8" Padding="10,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="20" />
+                                                </Grid.ColumnDefinitions>
+                                                <Path Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      Data="M 0 0 L 4 4 L 8 0 Z" Fill="#00E5FF" />
+                                            </Grid>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ContentSite"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              Margin="10,3,24,3"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left" />
+                            <Popup x:Name="Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Grid x:Name="DropDown"
+                                      SnapsToDevicePixels="True"
+                                      MinWidth="{TemplateBinding ActualWidth}"
+                                      MaxHeight="260">
+                                    <Border x:Name="DropDownBorder"
+                                            Background="#0A1424"
+                                            BorderBrush="#1E3A8A"
+                                            BorderThickness="1.5"
+                                            CornerRadius="8"
+                                            Padding="4"
+                                            Margin="0,4,0,0">
+                                        <ScrollViewer SnapsToDevicePixels="True">
+                                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -474,14 +575,14 @@
             <!-- ========================================================================= -->
             <!-- 5. INTERACTIVE EPISODE DOWNLOADER DRAWER / MODAL OVERLAY -->
             <!-- ========================================================================= -->
-            <Grid Grid.Row="0" Grid.RowSpan="2" Background="#B3000000" Visibility="{Binding IsEpisodeDrawerOpen, Converter={StaticResource BoolToVisConverter}}">
+            <Grid Grid.Row="0" Grid.RowSpan="2" Background="#D9000000" Visibility="{Binding IsEpisodeDrawerOpen, Converter={StaticResource BoolToVisConverter}}">
                 <Border Background="#0B1628" BorderBrush="#1E3A8A" BorderThickness="2" CornerRadius="16"
-                        Width="1080" Height="700" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24">
+                        Margin="16,8" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Padding="18">
                     <Grid>
                         <Grid.RowDefinitions>
-                            <!-- Drawer Header & Close Button -->
+                            <!-- Drawer Top Bar -->
                             <RowDefinition Height="Auto" />
-                            <!-- Drama Info & Save Folder -->
+                            <!-- Drama Info & Action Toolbar Card -->
                             <RowDefinition Height="Auto" />
                             <!-- Episodes Wrap Grid -->
                             <RowDefinition Height="*" />
@@ -490,63 +591,104 @@
                         </Grid.RowDefinitions>
 
                         <!-- Drawer Top Bar -->
-                        <DockPanel Grid.Row="0" Margin="0,0,0,16">
+                        <DockPanel Grid.Row="0" Margin="0,0,0,10">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
                                 <TextBlock Text="🎬 " FontSize="16" />
                                 <TextBlock Text="SNA PRO — EPISODE BATCH DOWNLOADER" FontSize="15" FontWeight="Black" Foreground="#00E5FF" />
                             </StackPanel>
-                            <Button Command="{Binding CloseDrawerCommand}" Content="✖ Back to Drama Library" Height="34" Padding="16,0"
+                            <Button Command="{Binding CloseDrawerCommand}" Content="✖ Back to Drama Library" Height="32" Padding="16,0"
                                     Background="#334155" Foreground="#FFFFFF" FontSize="12" FontWeight="Bold"
                                     BorderThickness="0" Cursor="Hand" HorizontalAlignment="Right">
                                 <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="8" /></Style></Button.Resources>
                             </Button>
                         </DockPanel>
 
-                        <!-- Selected Drama Details & Save Folder -->
-                        <Border Grid.Row="1" Background="#0E1E38" BorderBrush="#1E3A5F" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,0,16">
+                        <!-- Drama Info & Prominent Top Action Toolbar Card -->
+                        <Border Grid.Row="1" Background="#0E1E38" BorderBrush="#1E3A5F" BorderThickness="1" CornerRadius="12" Padding="14" Margin="0,0,0,10">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
 
-                                <!-- Poster -->
-                                <Border Grid.Column="0" Width="70" Height="90" CornerRadius="8" ClipToBounds="True" Margin="0,0,16,0">
-                                    <Image Source="{Binding SelectedDrama.CoverUrl}" Stretch="UniformToFill" />
-                                </Border>
+                                <!-- Upper Row: Drama Info & Save Folder -->
+                                <Grid Grid.Row="0" Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
 
-                                <!-- Title, Resolution, Summary -->
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding SelectedDrama.Title}" FontSize="18" FontWeight="Bold" Foreground="#FFFFFF" />
-                                        <Border Background="#1E3A8A" CornerRadius="5" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding SelectedDrama.Resolution}" FontSize="10" FontWeight="Bold" Foreground="#93C5FD" />
-                                        </Border>
+                                    <!-- Poster -->
+                                    <Border Grid.Column="0" Width="55" Height="70" CornerRadius="8" ClipToBounds="True" Margin="0,0,14,0">
+                                        <Image Source="{Binding SelectedDrama.CoverUrl}" Stretch="UniformToFill" />
+                                    </Border>
+
+                                    <!-- Title, Resolution, Summary -->
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding SelectedDrama.Title}" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" />
+                                            <Border Background="#1E3A8A" CornerRadius="5" Padding="7,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding SelectedDrama.Resolution}" FontSize="10" FontWeight="Bold" Foreground="#93C5FD" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding SelectedDrama.Summary}" FontSize="11" Foreground="#94A3B8" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" MaxWidth="550" />
+                                        <TextBlock Text="{Binding SelectedDrama.Episodes.Count, StringFormat='Total Available: {0} Episodes'}" FontSize="11" FontWeight="Bold" Foreground="#10B981" Margin="0,3,0,0" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding SelectedDrama.Summary}" FontSize="12" Foreground="#94A3B8" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" MaxWidth="540" />
-                                    <TextBlock Text="{Binding SelectedDrama.Episodes.Count, StringFormat='Total Available: {0} Episodes'}" FontSize="11" FontWeight="Bold" Foreground="#10B981" Margin="0,4,0,0" />
-                                </StackPanel>
 
-                                <!-- Save Directory Picker -->
-                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Width="260">
-                                    <TextBlock Text="DOWNLOAD DIRECTORY" FontSize="10" FontWeight="Bold" Foreground="#64748B" Margin="0,0,0,4" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True" Height="32" Padding="8,6" FontSize="11"
-                                                 Background="#080E1A" Foreground="#E2E8F0" BorderBrush="#1E2E4A" BorderThickness="1" />
-                                        <Button Grid.Column="1" Command="{Binding BrowseSaveDirectoryCommand}" Content="Browse" Height="32" Padding="10,0"
-                                                Background="#1E3A8A" Foreground="#FFFFFF" FontSize="11" FontWeight="Bold" BorderThickness="0" Cursor="Hand" />
-                                    </Grid>
-                                </StackPanel>
+                                    <!-- Save Directory Picker -->
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Width="260">
+                                        <TextBlock Text="DOWNLOAD DIRECTORY" FontSize="9" FontWeight="Bold" Foreground="#64748B" Margin="0,0,0,3" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Text="{Binding SaveDirectory}" IsReadOnly="True" Height="28" Padding="6,4" FontSize="10"
+                                                     Background="#080E1A" Foreground="#E2E8F0" BorderBrush="#1E2E4A" BorderThickness="1" />
+                                            <Button Grid.Column="1" Command="{Binding BrowseSaveDirectoryCommand}" Content="Browse" Height="28" Padding="10,0"
+                                                    Background="#1E3A8A" Foreground="#FFFFFF" FontSize="10" FontWeight="Bold" BorderThickness="0" Cursor="Hand" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Lower Row: Dedicated Action Buttons Toolbar -->
+                                <Border Grid.Row="1" Background="#0A1424" BorderBrush="#1E3A8A" BorderThickness="1" CornerRadius="8" Padding="12,8">
+                                    <DockPanel LastChildFill="False">
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                            <Button Command="{Binding SelectAllCommand}" Content="✓ Select All" Height="32" Padding="14,0"
+                                                    Background="#1E3A8A" Foreground="#FFFFFF" FontSize="11" FontWeight="Bold" BorderThickness="0" Cursor="Hand" Margin="0,0,8,0">
+                                                <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="6" /></Style></Button.Resources>
+                                            </Button>
+                                            <Button Command="{Binding DeselectAllCommand}" Content="✕ Deselect All" Height="32" Padding="14,0"
+                                                    Background="#1E2E4A" Foreground="#CBD5E1" FontSize="11" FontWeight="Bold" BorderThickness="0" Cursor="Hand" Margin="0,0,14,0">
+                                                <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="6" /></Style></Button.Resources>
+                                            </Button>
+                                            <Border Background="#083344" BorderBrush="#06B6D4" BorderThickness="1" CornerRadius="6" Padding="10,4" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding TotalSelectedCount, StringFormat='{}{0} Episodes Selected'}" FontSize="11" FontWeight="Bold" Foreground="#00E5FF" />
+                                            </Border>
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                            <Button Command="{Binding StartDownloadCommand}" Visibility="{Binding IsDownloading, Converter={StaticResource InverseBoolToVisConverter}}"
+                                                    Content="⚡ Start Download" Height="34" Padding="20,0"
+                                                    Background="#10B981" Foreground="#FFFFFF" FontSize="12" FontWeight="Black" BorderThickness="0" Cursor="Hand">
+                                                <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="7" /></Style></Button.Resources>
+                                            </Button>
+
+                                            <Button Command="{Binding CancelDownloadCommand}" Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisConverter}}"
+                                                    Content="⏹ Cancel Download" Height="34" Padding="16,0"
+                                                    Background="#E11D48" Foreground="#FFFFFF" FontSize="12" FontWeight="Bold" BorderThickness="0" Cursor="Hand">
+                                                <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="7" /></Style></Button.Resources>
+                                            </Button>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
                             </Grid>
                         </Border>
 
                         <!-- Scrollable Episodes Wrap Grid -->
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16">
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
                             <ItemsControl ItemsSource="{Binding CurrentEpisodes}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -555,11 +697,11 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Width="155" Height="140" Background="#0E192D" CornerRadius="10" Margin="0,0,12,12"
+                                        <Border Width="145" Height="130" Background="#0E192D" CornerRadius="10" Margin="0,0,10,10"
                                                 BorderBrush="{Binding Status, Converter={StaticResource StatusToBrushConverter}}" BorderThickness="1.5">
                                             <Grid>
                                                 <Grid.RowDefinitions>
-                                                    <RowDefinition Height="75" />
+                                                    <RowDefinition Height="68" />
                                                     <RowDefinition Height="*" />
                                                 </Grid.RowDefinitions>
 
@@ -578,7 +720,7 @@
                                                 <Border Grid.Row="1" Padding="8,4">
                                                     <StackPanel VerticalAlignment="Center">
                                                         <DockPanel>
-                                                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF" DockPanel.Dock="Left" />
+                                                            <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" DockPanel.Dock="Left" />
                                                             <TextBlock Text="{Binding Status}" FontSize="9" FontWeight="Bold"
                                                                        Foreground="{Binding Status, Converter={StaticResource StatusToBrushConverter}}" HorizontalAlignment="Right" />
                                                         </DockPanel>
@@ -595,7 +737,7 @@
                         </ScrollViewer>
 
                         <!-- Bottom Drawer Footer -->
-                        <Border Grid.Row="3" Background="#0E1E38" BorderBrush="#1E3A5F" BorderThickness="1" CornerRadius="12" Padding="16,12">
+                        <Border Grid.Row="3" Background="#0E1E38" BorderBrush="#1E3A5F" BorderThickness="1" CornerRadius="12" Padding="14,10">
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <!-- Select Actions -->
@@ -608,48 +750,48 @@
 
                                 <!-- Left: Select All / Deselect All -->
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button Command="{Binding SelectAllCommand}" Content="Select All" Padding="12,6"
-                                            Background="#1E2E4A" Foreground="#FFFFFF" FontSize="11" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand" Margin="0,0,8,0">
+                                    <Button Command="{Binding SelectAllCommand}" Content="✓ Select All" Padding="12,6"
+                                            Background="#1E2E4A" Foreground="#FFFFFF" FontSize="11" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand" Margin="0,0,6,0">
                                         <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="6" /></Style></Button.Resources>
                                     </Button>
-                                    <Button Command="{Binding DeselectAllCommand}" Content="Deselect All" Padding="12,6"
-                                            Background="#1E2E4A" Foreground="#CBD5E1" FontSize="11" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand" Margin="0,0,16,0">
+                                    <Button Command="{Binding DeselectAllCommand}" Content="✕ Deselect All" Padding="12,6"
+                                            Background="#1E2E4A" Foreground="#CBD5E1" FontSize="11" FontWeight="SemiBold" BorderThickness="0" Cursor="Hand" Margin="0,0,12,0">
                                         <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="6" /></Style></Button.Resources>
                                     </Button>
                                     <TextBlock Text="{Binding TotalSelectedCount, StringFormat='{}{0} Selected'}" FontSize="12" FontWeight="Bold" Foreground="#00E5FF" VerticalAlignment="Center" />
                                 </StackPanel>
 
                                 <!-- Center: Worker Threads & Overall Progress -->
-                                <Grid Grid.Column="1" Margin="24,0">
+                                <Grid Grid.Column="1" Margin="20,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
 
-                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                                        <TextBlock Text="Threads:" FontSize="11" FontWeight="Bold" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                        <ComboBox ItemsSource="{Binding WorkerOptions}" SelectedItem="{Binding WorkerCount}" Width="50" Height="28" FontSize="11" FontWeight="Bold" Background="#080E1A" Foreground="#FFFFFF" />
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <TextBlock Text="Threads:" FontSize="11" FontWeight="Bold" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                        <ComboBox ItemsSource="{Binding WorkerOptions}" SelectedItem="{Binding WorkerCount}" Width="48" Height="26" FontSize="11" FontWeight="Bold" Background="#080E1A" Foreground="#FFFFFF" />
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <DockPanel Margin="0,0,0,3">
-                                            <TextBlock Text="{Binding StatusMessage}" FontSize="10" Foreground="#94A3B8" DockPanel.Dock="Left" TextTrimming="CharacterEllipsis" MaxWidth="280" />
+                                        <DockPanel Margin="0,0,0,2">
+                                            <TextBlock Text="{Binding StatusMessage}" FontSize="10" Foreground="#94A3B8" DockPanel.Dock="Left" TextTrimming="CharacterEllipsis" MaxWidth="250" />
                                             <TextBlock Text="{Binding OverallProgress, StringFormat='Overall: {0:F1}%'}" FontSize="10" FontWeight="Bold" Foreground="#10B981" HorizontalAlignment="Right" />
                                         </DockPanel>
-                                        <ProgressBar Value="{Binding OverallProgress}" Maximum="100" Height="6" Background="#080E1A" Foreground="#10B981" BorderThickness="0" />
+                                        <ProgressBar Value="{Binding OverallProgress}" Maximum="100" Height="5" Background="#080E1A" Foreground="#10B981" BorderThickness="0" />
                                     </StackPanel>
                                 </Grid>
 
                                 <!-- Right: Start Download Button -->
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Command="{Binding StartDownloadCommand}" Visibility="{Binding IsDownloading, Converter={StaticResource InverseBoolToVisConverter}}"
-                                            Content="⚡ Start Download" Height="38" Padding="20,0"
+                                            Content="⚡ Start Download" Height="36" Padding="18,0"
                                             Background="#10B981" Foreground="#FFFFFF" FontSize="12" FontWeight="Bold" BorderThickness="0" Cursor="Hand">
                                         <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="8" /></Style></Button.Resources>
                                     </Button>
 
                                     <Button Command="{Binding CancelDownloadCommand}" Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisConverter}}"
-                                            Content="⏹ Cancel" Height="38" Padding="16,0"
+                                            Content="⏹ Cancel" Height="36" Padding="16,0"
                                             Background="#E11D48" Foreground="#FFFFFF" FontSize="12" FontWeight="Bold" BorderThickness="0" Cursor="Hand">
                                         <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="8" /></Style></Button.Resources>
                                     </Button>
