@@ -298,7 +298,8 @@ namespace Tool.ViewModels
 
                         if (episode.Status == EpisodeDownloadStatus.Completed)
                         {
-                            System.Windows.Application.Current?.Dispatcher.Invoke(() => CompletedCount++);
+                            Interlocked.Increment(ref _completedCount);
+                            OnPropertyChanged(nameof(CompletedCount));
                         }
                     }
                     catch (Exception ex)

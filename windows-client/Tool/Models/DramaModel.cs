@@ -13,10 +13,7 @@ namespace Tool.Models
         private string _title = string.Empty;
 
         [ObservableProperty]
-        private string _chineseTitle = string.Empty;
-
-        [ObservableProperty]
-        private string _coverUrl = "https://vcover-vt-pic.wetvinfo.com/vcover_vt_pic/0/94jt6sxiwsjw5n61786414600805/350";
+        private string _coverUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400";
 
         [ObservableProperty]
         private string _resolution = "1080p FHD";
@@ -28,19 +25,10 @@ namespace Tool.Models
         private int _totalEpisodes = 0;
 
         [ObservableProperty]
-        private string _episodeBadge = "全40集";
-
-        [ObservableProperty]
         private string _summary = string.Empty;
 
         [ObservableProperty]
         private string _saveDirectory = string.Empty;
-
-        [ObservableProperty]
-        private ObservableCollection<string> _tags = new();
-
-        [ObservableProperty]
-        private bool _isFavorite;
 
         [ObservableProperty]
         private ObservableCollection<EpisodeModel> _episodes = new();
