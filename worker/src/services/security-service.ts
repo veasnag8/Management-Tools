@@ -41,13 +41,11 @@ function base64url2buf(b64url: string): Uint8Array {
   return bytes;
 }
 
-export const DEFAULT_JWT_SECRET = 'b6e3f89a74c10294857d19e830c24f61e8947b19485d928374a5e6f1c2d3b4a5';
-
 /**
  * Import HMAC key for WebCrypto
  */
-async function getHmacKey(secret?: string): Promise<CryptoKey> {
-  const keyData = str2buf(secret || DEFAULT_JWT_SECRET);
+async function getHmacKey(secret: string): Promise<CryptoKey> {
+  const keyData = str2buf(secret || 'default-fallback-super-secret-key-32b');
   return await crypto.subtle.importKey(
     'raw',
     keyData,
