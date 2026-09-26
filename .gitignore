@@ -23,7 +23,7 @@ obj/
 TestResults/
 Output/
 
-# OS
-Thumbs.db
-.DS_Store
-*.log
+# Large Tools Binaries (>100MB)
+windows-client/Tool/Tools/ffmpeg.exe
+windows-client/Tool/Tools/ffprobe.exe
+windows-client/bin/
