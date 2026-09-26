@@ -6,7 +6,7 @@
         xmlns:models="clr-namespace:Tool.Models"
         xmlns:converters="clr-namespace:Tool.Converters"
         mc:Ignorable="d"
-        Title="KN 3in1 Pro — Streaming Drama Manager &amp; Batch Downloader"
+        Title="SNA Pro — Streaming Drama Manager &amp; Batch Downloader"
         Height="820" Width="1360"
         MinHeight="700" MinWidth="1100"
         WindowStartupLocation="CenterScreen"
@@ -84,7 +84,7 @@
                         <TextBlock Text="⚡" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="KN 3in1 Pro" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" />
+                        <TextBlock Text="SNA Pro" FontSize="16" FontWeight="Bold" Foreground="#FFFFFF" />
                         <TextBlock Text="Drama Downloader Suite" FontSize="11" Foreground="#06B6D4" FontWeight="SemiBold" />
                     </StackPanel>
                 </StackPanel>
