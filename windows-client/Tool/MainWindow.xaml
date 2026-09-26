@@ -578,16 +578,13 @@
                                                 <Border Grid.Row="1" Padding="8,4">
                                                     <StackPanel VerticalAlignment="Center">
                                                         <DockPanel>
-                                                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF" DockPanel.Dock="Left" TextTrimming="CharacterEllipsis" MaxWidth="80" />
+                                                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF" DockPanel.Dock="Left" />
                                                             <TextBlock Text="{Binding Status}" FontSize="9" FontWeight="Bold"
                                                                        Foreground="{Binding Status, Converter={StaticResource StatusToBrushConverter}}" HorizontalAlignment="Right" />
                                                         </DockPanel>
                                                         <ProgressBar Value="{Binding Progress}" Maximum="100" Height="3" Margin="0,4,0,2"
                                                                      Background="#080E1A" Foreground="#10B981" BorderThickness="0" />
-                                                        <DockPanel>
-                                                            <TextBlock Text="{Binding FileSize}" FontSize="9" Foreground="#94A3B8" DockPanel.Dock="Left" />
-                                                            <TextBlock Text="{Binding Progress, StringFormat='{}{0:F0}%'}" FontSize="9" FontWeight="Bold" Foreground="#CBD5E1" HorizontalAlignment="Right" />
-                                                        </DockPanel>
+                                                        <TextBlock Text="{Binding Progress, StringFormat='{}{0:F0}%'}" FontSize="9" FontWeight="Bold" Foreground="#CBD5E1" HorizontalAlignment="Right" />
                                                     </StackPanel>
                                                 </Border>
                                             </Grid>

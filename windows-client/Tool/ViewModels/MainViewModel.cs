@@ -341,7 +341,7 @@ namespace Tool.ViewModels
                 var drama = await _crawlerService.FetchDramaDetailsAsync(SearchUrl, SelectedPlatform);
                 DramaLibrary.Insert(0, drama);
                 ApplyFilterAndPagination();
-                await SelectDrama(drama);
+                SelectDrama(drama);
                 StatusMessage = $"Successfully loaded {drama.Title} ({drama.Episodes.Count} episodes).";
             }
             catch (Exception ex)
@@ -355,36 +355,12 @@ namespace Tool.ViewModels
         }
 
         [RelayCommand]
-        public async Task SelectDrama(DramaModel drama)
+        public void SelectDrama(DramaModel drama)
         {
             if (drama == null) return;
             SetSelectedDramaInternal(drama);
             IsEpisodeDrawerOpen = true; // Open drawer when user clicks on a drama card!
-
-            // If the drama needs real live metadata from website
-            if (drama.Episodes.Count == 0 || drama.Episodes.Any(e => string.IsNullOrEmpty(e.StreamUrl) || e.Duration == "--"))
-            {
-                StatusMessage = $"Connecting to platform to fetch real-time episodes for {drama.Title}...";
-                IsBusy = true;
-                try
-                {
-                    await _crawlerService.SyncRealDramaEpisodesAsync(drama);
-                    SetSelectedDramaInternal(drama);
-                    StatusMessage = $"Loaded {drama.Episodes.Count} real episodes directly from website for {drama.Title}.";
-                }
-                catch (Exception ex)
-                {
-                    StatusMessage = $"Failed to sync real episodes: {ex.Message}";
-                }
-                finally
-                {
-                    IsBusy = false;
-                }
-            }
-            else
-            {
-                StatusMessage = $"Selected: {drama.Title} ({drama.Episodes.Count} episodes ready for batch download).";
-            }
+            StatusMessage = $"Selected: {drama.Title} ({drama.Episodes.Count} episodes ready for batch download).";
         }
 
         private void SetSelectedDramaInternal(DramaModel drama)
@@ -486,8 +462,7 @@ namespace Tool.ViewModels
             CompletedCount = 0;
             OverallProgress = 0.0;
 
-            var sanitizedTitle = SanitizeFolderName(SelectedDrama.Title);
-            var dramaSubfolder = Path.Combine(SaveDirectory, sanitizedTitle);
+            var dramaSubfolder = Path.Combine(SaveDirectory, SelectedDrama.Title);
             Directory.CreateDirectory(dramaSubfolder);
 
             var semaphore = new SemaphoreSlim(WorkerCount, WorkerCount);
@@ -565,16 +540,6 @@ namespace Tool.ViewModels
             if (activeList.Count == 0) return;
             var totalPct = activeList.Sum(e => e.Progress);
             OverallProgress = Math.Round(totalPct / activeList.Count, 1);
-        }
-
-        private static string SanitizeFolderName(string name)
-        {
-            var invalid = Path.GetInvalidFileNameChars();
-            foreach (var c in invalid)
-            {
-                name = name.Replace(c, '_');
-            }
-            return name.Trim();
         }
     }
 }

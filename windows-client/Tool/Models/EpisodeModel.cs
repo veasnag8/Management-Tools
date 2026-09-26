@@ -28,10 +28,7 @@ namespace Tool.Models
         private string _thumbnailUrl = "https://images.unsplash.com/photo-1578022761797-b8636ac1773c?w=400";
 
         [ObservableProperty]
-        private string _duration = "--";
-
-        [ObservableProperty]
-        private string _fileSize = "--";
+        private string _duration = "45m 10s";
 
         [ObservableProperty]
         private string _streamUrl = string.Empty;
