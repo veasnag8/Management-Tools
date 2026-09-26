@@ -339,7 +339,7 @@ namespace Tool.Services
                         {
                             EpisodeNumber = ep,
                             Title = $"EP{ep:D2}",
-                            Duration = $"{43 + (ep % 6)}m {15 + (ep * 11) % 44:D2}s",
+                            Duration = $"01m {20 + (ep * 7) % 38:D2}s",
                             ThumbnailUrl = cover,
                             StreamUrl = $"https://stream.hongguo.com/video/{drama.Id}/ep_{ep}.m3u8",
                             IsSelected = true
