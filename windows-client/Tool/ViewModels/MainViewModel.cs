@@ -39,9 +39,6 @@ namespace Tool.ViewModels
         private ObservableCollection<DramaModel> _dramaLibrary = new();
 
         [ObservableProperty]
-        private ObservableCollection<DramaModel> _filteredDramaLibrary = new();
-
-        [ObservableProperty]
         private DramaModel? _selectedDrama;
 
         [ObservableProperty]
@@ -71,35 +68,9 @@ namespace Tool.ViewModels
         [ObservableProperty]
         private int _totalSelectedCount = 0;
 
-        // UI View State
-        [ObservableProperty]
-        private bool _isPosterView = true;
-
-        [ObservableProperty]
-        private bool _isEpisodeDrawerOpen = false;
-
-        [ObservableProperty]
-        private string _totalShowsBadge = "176910 Shows";
-
-        [ObservableProperty]
-        private ObservableCollection<string> _categories = new()
-        {
-            "🌟 ទាំងអស់ (All)",
-            "🔥 ពេញនិយម (Popular)",
-            "💖 恋爱 (Romance)",
-            "🏙️ 都市 (Urban)",
-            "⚡ 逆袭 (Revenge)",
-            "👑 战神 (God of War)",
-            "🌾 乡村 (Rural)",
-            "🧙 穿越 (Time Travel)"
-        };
-
-        [ObservableProperty]
-        private string _selectedCategory = "🌟 ទាំងអស់ (All)";
-
         // Licensing Telemetry Binding
         [ObservableProperty]
-        private string _licenseStatusText = "● Active License";
+        private string _licenseStatusText = "Active License";
 
         [ObservableProperty]
         private string _pcId = string.Empty;
@@ -118,6 +89,7 @@ namespace Tool.ViewModels
             _licenseManager = licenseManager;
             _updateManager = updateManager;
 
+            // Default save folder in Videos / Downloads
             var myVideos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
             _saveDirectory = Path.Combine(myVideos, "DramaDownloads");
             Directory.CreateDirectory(_saveDirectory);
@@ -125,7 +97,7 @@ namespace Tool.ViewModels
             _pcId = _licenseManager.CurrentDeviceId;
             UpdateLicenseInfo();
 
-            // Auto sync & load initial HongGuo library on startup
+            // Load initial library
             _ = LoadFeaturedLibraryAsync();
         }
 
@@ -147,14 +119,13 @@ namespace Tool.ViewModels
         public async Task SwitchPlatformAsync(PlatformType platform)
         {
             SelectedPlatform = platform;
-            IsEpisodeDrawerOpen = false;
             await LoadFeaturedLibraryAsync();
         }
 
         public async Task LoadFeaturedLibraryAsync()
         {
             IsBusy = true;
-            StatusMessage = $"Synchronizing {SelectedPlatform} library covers...";
+            StatusMessage = $"Loading {SelectedPlatform} library...";
             try
             {
                 var library = await _crawlerService.GetFeaturedLibraryAsync(SelectedPlatform);
@@ -164,79 +135,19 @@ namespace Tool.ViewModels
                     DramaLibrary.Add(item);
                 }
 
-                ApplyFilter();
-
                 if (DramaLibrary.Count > 0)
                 {
-                    SetSelectedDramaInternal(DramaLibrary[0]);
+                    SelectDrama(DramaLibrary[0]);
                 }
-                
-                // Keep drawer closed on initial startup so user sees all posters immediately
-                IsEpisodeDrawerOpen = false;
-                StatusMessage = $"176,910 Shows synced. Displaying {FilteredDramaLibrary.Count} featured dramas from {SelectedPlatform}.";
+                StatusMessage = $"Loaded {DramaLibrary.Count} featured dramas from {SelectedPlatform}.";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error synchronizing library: {ex.Message}";
+                StatusMessage = $"Error loading library: {ex.Message}";
             }
             finally
             {
                 IsBusy = false;
-            }
-        }
-
-        [RelayCommand]
-        public async Task ScanShowAllAsync()
-        {
-            IsBusy = true;
-            StatusMessage = $"Scanning cloud database for {SelectedPlatform} short dramas & series...";
-            await Task.Delay(300);
-            await LoadFeaturedLibraryAsync();
-            IsEpisodeDrawerOpen = false;
-            StatusMessage = $"176,910 Shows synchronized successfully from {SelectedPlatform}.";
-        }
-
-        [RelayCommand]
-        public void ToggleViewMode(string mode)
-        {
-            IsPosterView = mode.Equals("Poster", StringComparison.OrdinalIgnoreCase);
-        }
-
-        partial void OnSelectedCategoryChanged(string value)
-        {
-            ApplyFilter();
-        }
-
-        partial void OnSearchUrlChanged(string value)
-        {
-            ApplyFilter();
-        }
-
-        private void ApplyFilter()
-        {
-            FilteredDramaLibrary.Clear();
-            var query = SearchUrl?.Trim();
-            var category = SelectedCategory;
-
-            var items = DramaLibrary.AsEnumerable();
-
-            if (!string.IsNullOrEmpty(query))
-            {
-                items = items.Where(d =>
-                    d.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    d.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    d.Tags.Any(t => t.Contains(query, StringComparison.OrdinalIgnoreCase)));
-            }
-
-            if (!string.IsNullOrEmpty(category) && !category.Contains("ទាំងអស់") && !category.Contains("All"))
-            {
-                var catKeyword = category.Split(' ').Last().Trim('(', ')');
-                items = items.Where(d => d.Tags.Any(t => t.Contains(catKeyword, StringComparison.OrdinalIgnoreCase) || d.Summary.Contains(catKeyword, StringComparison.OrdinalIgnoreCase)));
-            }
-
-            foreach (var drama in items)
-            {
-                FilteredDramaLibrary.Add(drama);
             }
         }
 
@@ -255,7 +166,6 @@ namespace Tool.ViewModels
             {
                 var drama = await _crawlerService.FetchDramaDetailsAsync(SearchUrl, SelectedPlatform);
                 DramaLibrary.Insert(0, drama);
-                ApplyFilter();
                 SelectDrama(drama);
                 StatusMessage = $"Successfully loaded {drama.Title} ({drama.Episodes.Count} episodes).";
             }
@@ -272,14 +182,6 @@ namespace Tool.ViewModels
         [RelayCommand]
         public void SelectDrama(DramaModel drama)
         {
-            if (drama == null) return;
-            SetSelectedDramaInternal(drama);
-            IsEpisodeDrawerOpen = true; // Open drawer when user clicks on a drama card!
-            StatusMessage = $"Selected: {drama.Title} ({drama.Episodes.Count} episodes ready for batch download).";
-        }
-
-        private void SetSelectedDramaInternal(DramaModel drama)
-        {
             if (SelectedDrama != null)
             {
                 SelectedDrama.IsSelectedInLibrary = false;
@@ -291,26 +193,10 @@ namespace Tool.ViewModels
             CurrentEpisodes.Clear();
             foreach (var ep in drama.Episodes)
             {
-                ep.IsSelected = true; // Select all by default for fast batch download
                 CurrentEpisodes.Add(ep);
             }
 
             UpdateSelectionCount();
-        }
-
-        [RelayCommand]
-        public void CloseDrawer()
-        {
-            IsEpisodeDrawerOpen = false;
-        }
-
-        [RelayCommand]
-        public void ToggleFavorite(DramaModel drama)
-        {
-            if (drama != null)
-            {
-                drama.IsFavorite = !drama.IsFavorite;
-            }
         }
 
         [RelayCommand]
@@ -341,6 +227,7 @@ namespace Tool.ViewModels
         [RelayCommand]
         public void BrowseSaveDirectory()
         {
+            // Simple folder dialog or standard folder selection
             var dialog = new Microsoft.Win32.OpenFolderDialog
             {
                 Title = "Select Output Save Directory",
@@ -377,9 +264,11 @@ namespace Tool.ViewModels
             CompletedCount = 0;
             OverallProgress = 0.0;
 
+            // Target output subfolder
             var dramaSubfolder = Path.Combine(SaveDirectory, SelectedDrama.Title);
             Directory.CreateDirectory(dramaSubfolder);
 
+            // Concurrency control via SemaphoreSlim
             var semaphore = new SemaphoreSlim(WorkerCount, WorkerCount);
             var tasks = new List<Task>();
 
@@ -401,6 +290,7 @@ namespace Tool.ViewModels
 
                         var epProgress = new Progress<(double Progress, string Speed, string Eta)>(data =>
                         {
+                            // Trigger dynamic progress calculation
                             RecalculateOverallProgress(selectedEps);
                         });
 

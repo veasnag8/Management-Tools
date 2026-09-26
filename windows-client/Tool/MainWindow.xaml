@@ -311,7 +311,7 @@
         <!-- 4. MAIN DRAMA POSTERS GRID -->
         <!-- ========================================================================= -->
         <Grid Grid.Row="3">
-            <!-- POSTER GRID VIEW -->
+            <!-- POSTER GRID VIEW (Supports dozens of drama cards smoothly) -->
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,4,16,16"
                           Visibility="{Binding IsPosterView, Converter={StaticResource BoolToVisConverter}}">
                 <ItemsControl ItemsSource="{Binding FilteredDramaLibrary}">
@@ -322,13 +322,13 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Button Style="{StaticResource PosterCardButtonStyle}" Width="230" Margin="8,8,12,16"
+                            <Button Style="{StaticResource PosterCardButtonStyle}" Width="225" Margin="8,8,12,16"
                                     Command="{Binding DataContext.SelectDramaCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                     CommandParameter="{Binding}">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <!-- Poster Image with Overlays -->
-                                        <RowDefinition Height="290" />
+                                        <RowDefinition Height="285" />
                                         <!-- Drama Title -->
                                         <RowDefinition Height="Auto" />
                                         <!-- Genre Tags -->
@@ -374,7 +374,7 @@
                                     </Border>
 
                                     <!-- 2. DRAMA CHINESE TITLE -->
-                                    <TextBlock Grid.Row="1" Text="{Binding Title}" FontSize="15" FontWeight="Bold" Foreground="#FFFFFF"
+                                    <TextBlock Grid.Row="1" Text="{Binding Title}" FontSize="14" FontWeight="Bold" Foreground="#FFFFFF"
                                                Margin="0,10,0,6" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
 
                                     <!-- 3. GENRE TAG PILLS (剧情, 乡村, 恋爱, 逆袭, 都市, etc.) -->
@@ -388,7 +388,7 @@
                                             <DataTemplate>
                                                 <Border Background="#162A45" BorderBrush="#1E3E66" BorderThickness="1"
                                                         CornerRadius="4" Padding="7,2" Margin="0,0,6,0">
-                                                    <TextBlock Text="{Binding}" FontSize="11" Foreground="#7DD3FC" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding}" FontSize="10" Foreground="#7DD3FC" FontWeight="SemiBold" />
                                                 </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
