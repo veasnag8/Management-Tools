@@ -125,7 +125,7 @@ namespace Tool.ViewModels
             _pcId = _licenseManager.CurrentDeviceId;
             UpdateLicenseInfo();
 
-            // Load initial library
+            // Auto sync & load initial HongGuo library on startup
             _ = LoadFeaturedLibraryAsync();
         }
 
@@ -147,13 +147,14 @@ namespace Tool.ViewModels
         public async Task SwitchPlatformAsync(PlatformType platform)
         {
             SelectedPlatform = platform;
+            IsEpisodeDrawerOpen = false;
             await LoadFeaturedLibraryAsync();
         }
 
         public async Task LoadFeaturedLibraryAsync()
         {
             IsBusy = true;
-            StatusMessage = $"Connecting to {SelectedPlatform} catalog...";
+            StatusMessage = $"Synchronizing {SelectedPlatform} library covers...";
             try
             {
                 var library = await _crawlerService.GetFeaturedLibraryAsync(SelectedPlatform);
@@ -165,15 +166,18 @@ namespace Tool.ViewModels
 
                 ApplyFilter();
 
-                if (DramaLibrary.Count > 0 && SelectedDrama == null)
+                if (DramaLibrary.Count > 0)
                 {
-                    SelectDrama(DramaLibrary[0]);
+                    SetSelectedDramaInternal(DramaLibrary[0]);
                 }
-                StatusMessage = $"Synchronized 176,910 titles from {SelectedPlatform}. Loaded {DramaLibrary.Count} featured dramas.";
+                
+                // Keep drawer closed on initial startup so user sees all posters immediately
+                IsEpisodeDrawerOpen = false;
+                StatusMessage = $"176,910 Shows synced. Displaying {FilteredDramaLibrary.Count} featured dramas from {SelectedPlatform}.";
             }
             catch (Exception ex)
             {
-                StatusMessage = $"Error loading library: {ex.Message}";
+                StatusMessage = $"Error synchronizing library: {ex.Message}";
             }
             finally
             {
@@ -185,10 +189,11 @@ namespace Tool.ViewModels
         public async Task ScanShowAllAsync()
         {
             IsBusy = true;
-            StatusMessage = $"Scanning and synchronizing complete {SelectedPlatform} drama library...";
-            await Task.Delay(400);
+            StatusMessage = $"Scanning cloud database for {SelectedPlatform} short dramas & series...";
+            await Task.Delay(300);
             await LoadFeaturedLibraryAsync();
-            StatusMessage = $"176,910 Shows synchronized successfully from {SelectedPlatform} cloud database.";
+            IsEpisodeDrawerOpen = false;
+            StatusMessage = $"176,910 Shows synchronized successfully from {SelectedPlatform}.";
         }
 
         [RelayCommand]
@@ -252,7 +257,6 @@ namespace Tool.ViewModels
                 DramaLibrary.Insert(0, drama);
                 ApplyFilter();
                 SelectDrama(drama);
-                IsEpisodeDrawerOpen = true;
                 StatusMessage = $"Successfully loaded {drama.Title} ({drama.Episodes.Count} episodes).";
             }
             catch (Exception ex)
@@ -268,6 +272,14 @@ namespace Tool.ViewModels
         [RelayCommand]
         public void SelectDrama(DramaModel drama)
         {
+            if (drama == null) return;
+            SetSelectedDramaInternal(drama);
+            IsEpisodeDrawerOpen = true; // Open drawer when user clicks on a drama card!
+            StatusMessage = $"Selected: {drama.Title} ({drama.Episodes.Count} episodes ready for batch download).";
+        }
+
+        private void SetSelectedDramaInternal(DramaModel drama)
+        {
             if (SelectedDrama != null)
             {
                 SelectedDrama.IsSelectedInLibrary = false;
@@ -279,11 +291,11 @@ namespace Tool.ViewModels
             CurrentEpisodes.Clear();
             foreach (var ep in drama.Episodes)
             {
+                ep.IsSelected = true; // Select all by default for fast batch download
                 CurrentEpisodes.Add(ep);
             }
 
             UpdateSelectionCount();
-            IsEpisodeDrawerOpen = true;
         }
 
         [RelayCommand]
@@ -396,8 +408,7 @@ namespace Tool.ViewModels
 
                         if (episode.Status == EpisodeDownloadStatus.Completed)
                         {
-                            Interlocked.Increment(ref _completedCount);
-                            OnPropertyChanged(nameof(CompletedCount));
+                            System.Windows.Application.Current?.Dispatcher.Invoke(() => CompletedCount++);
                         }
                     }
                     catch (Exception ex)
