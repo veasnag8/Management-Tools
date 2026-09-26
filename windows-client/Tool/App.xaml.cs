@@ -14,7 +14,7 @@ namespace Tool
         {
             base.OnStartup(e);
 
-            // 1. Initialize license validation services
+            // 1. Initialize license validation services with production Cloudflare Worker API
             var apiClient = new LicenseApiClient(LicenseApiClient.DefaultBaseUrl);
             var storageService = new SecureStorageService();
             var deviceIdService = new DeviceIdService();
