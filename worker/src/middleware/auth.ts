@@ -37,7 +37,7 @@ export async function authenticateDevice(
   }
 
   const token = authHeader.substring(7).trim();
-  const payload = await verifyDeviceToken(token, env.JWT_SECRET || 'b6e3f89a74c10294857d19e830c24f61e8947b19485d928374a5e6f1c2d3b4a5');
+  const payload = await verifyDeviceToken(token, env.JWT_SECRET);
 
   if (!payload || !payload.sub || !payload.license_id) {
     return {

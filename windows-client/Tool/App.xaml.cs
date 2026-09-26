@@ -15,7 +15,7 @@ namespace Tool
             base.OnStartup(e);
 
             // 1. Initialize license validation services
-            var apiClient = new LicenseApiClient();
+            var apiClient = new LicenseApiClient(LicenseApiClient.DefaultBaseUrl);
             var storageService = new SecureStorageService();
             var deviceIdService = new DeviceIdService();
             var signatureVerifier = new LicenseSignatureVerifier();

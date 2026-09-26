@@ -48,7 +48,9 @@ namespace Tool.License
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
 
-        public LicenseApiClient(string baseUrl = "http://localhost:8787", HttpClient? customClient = null)
+        public const string DefaultBaseUrl = "https://license-api.veasnag8.workers.dev";
+
+        public LicenseApiClient(string baseUrl = DefaultBaseUrl, HttpClient? customClient = null)
         {
             _baseUrl = baseUrl.TrimEnd('/');
             _httpClient = customClient ?? new HttpClient
