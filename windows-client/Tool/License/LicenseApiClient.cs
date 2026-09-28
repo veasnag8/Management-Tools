@@ -1,6 +1,8 @@
 using System;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -45,16 +47,37 @@ namespace Tool.License
 
     public class LicenseApiClient : ILicenseApiClient
     {
+        public const string DefaultProductionUrl = "https://license-api.veasnag8.workers.dev";
+
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
 
-        public LicenseApiClient(string baseUrl = "http://localhost:8787", HttpClient? customClient = null)
+        public LicenseApiClient(string? baseUrl = null, HttpClient? customClient = null)
         {
-            _baseUrl = baseUrl.TrimEnd('/');
-            _httpClient = customClient ?? new HttpClient
+            var envUrl = Environment.GetEnvironmentVariable("LICENSE_API_URL");
+            _baseUrl = (!string.IsNullOrWhiteSpace(baseUrl)
+                ? baseUrl
+                : (!string.IsNullOrWhiteSpace(envUrl) ? envUrl : DefaultProductionUrl)).TrimEnd('/');
+
+            if (customClient != null)
             {
-                Timeout = TimeSpan.FromSeconds(10)
-            };
+                _httpClient = customClient;
+            }
+            else
+            {
+                var handler = new SocketsHttpHandler
+                {
+                    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                    SslOptions = new SslClientAuthenticationOptions
+                    {
+                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                    }
+                };
+                _httpClient = new HttpClient(handler)
+                {
+                    Timeout = TimeSpan.FromSeconds(15)
+                };
+            }
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("WindowsClient-EXE/1.0");
         }
 
