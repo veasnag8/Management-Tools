@@ -122,7 +122,7 @@ export default function LicenseDetailPage() {
         try {
           await supabase
             .from('devices')
-            .delete()
+            .update({ status: 'revoked', updated_at: new Date().toISOString() })
             .eq('license_id', id)
             .eq('device_id', deviceId);
           await fetchLicenseData();

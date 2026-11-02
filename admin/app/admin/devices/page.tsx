@@ -68,7 +68,7 @@ export default function DevicesPage() {
       message: `Revoke device ${device.device_id} (${device.device_name || 'PC'}) from license ${device.license?.license_key}? This machine will no longer pass online or offline validation until re-activated.`,
       onConfirm: async () => {
         try {
-          await supabase.from('devices').delete().eq('id', device.id);
+          await supabase.from('devices').update({ status: 'revoked', updated_at: new Date().toISOString() }).eq('id', device.id);
           await fetchDevices();
         } finally {
           setConfirmModal((prev) => ({ ...prev, isOpen: false }));
