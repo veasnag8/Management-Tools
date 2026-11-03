@@ -37,3 +37,6 @@ export function StatusBadge({ status, className }: BadgeProps) {
     </span>
   );
 }
+
+export const Badge = StatusBadge;
+export default StatusBadge;

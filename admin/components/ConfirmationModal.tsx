@@ -7,8 +7,9 @@ interface ConfirmationModalProps {
   message: string;
   confirmText?: string;
   confirmVariant?: 'danger' | 'warning' | 'primary';
+  variant?: 'danger' | 'warning' | 'primary';
   isLoading?: boolean;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -17,12 +18,15 @@ export function ConfirmationModal({
   title,
   message,
   confirmText = 'Confirm',
-  confirmVariant = 'danger',
+  confirmVariant,
+  variant = 'danger',
   isLoading = false,
   onConfirm,
   onCancel,
 }: ConfirmationModalProps) {
   if (!isOpen) return null;
+
+  const actualVariant = confirmVariant || variant;
 
   const variantStyles = {
     danger: 'bg-rose-600 hover:bg-rose-700 text-white',
@@ -50,20 +54,21 @@ export function ConfirmationModal({
 
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
             <button
-              type="button"
               onClick={onCancel}
               disabled={isLoading}
-              className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
-              type="button"
               onClick={onConfirm}
               disabled={isLoading}
-              className={`px-4 py-2 text-sm font-medium rounded-lg ${variantStyles[confirmVariant]}`}
+              className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors disabled:opacity-50 flex items-center space-x-2 ${variantStyles[actualVariant] || variantStyles.danger}`}
             >
-              {isLoading ? 'Processing...' : confirmText}
+              {isLoading && (
+                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              )}
+              <span>{confirmText}</span>
             </button>
           </div>
         </div>
@@ -71,3 +76,5 @@ export function ConfirmationModal({
     </div>
   );
 }
+
+export default ConfirmationModal;

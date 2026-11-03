@@ -82,7 +82,7 @@ export default function DevicesPage() {
     return (
       d.device_id.toLowerCase().includes(term) ||
       (d.device_name && d.device_name.toLowerCase().includes(term)) ||
-      (d.last_ip_address && d.last_ip_address.toLowerCase().includes(term)) ||
+      (d.ip_address && d.ip_address.toLowerCase().includes(term)) ||
       (d.license?.license_key && d.license.license_key.toLowerCase().includes(term)) ||
       (d.license?.customer_name && d.license.customer_name.toLowerCase().includes(term))
     );

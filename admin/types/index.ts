@@ -38,6 +38,7 @@ export interface License {
   created_at: string;
   updated_at: string;
   products?: Product;
+  product?: Product;
   devices?: Device[];
   device_count?: number;
 }
@@ -52,36 +53,23 @@ export interface Device {
   os_name: string | null;
   os_version: string | null;
   app_version: string | null;
-  first_activated_at: string;
-  last_seen_at: string;
-  last_ip_address: string | null;
-  status: DeviceStatus;
-  created_at: string;
-  updated_at: string;
-  licenses?: License;
-}
-
-export interface ActivationLog {
-  id: string;
-  license_id: string | null;
-  device_id: string | null;
-  action: 'activate' | 'validate' | 'heartbeat' | 'deactivate' | 'reset' | 'blocked' | 'expired';
   ip_address: string | null;
-  user_agent: string | null;
-  metadata: any;
-  created_at: string;
-  licenses?: License;
+  last_ip_address?: string | null;
+  status: DeviceStatus;
+  first_seen_at: string;
+  last_seen_at: string;
+  revoked_at: string | null;
+  revocation_reason: string | null;
 }
 
 export interface LicenseLog {
   id: string;
-  license_id: string | null;
+  license_id: string;
   admin_id: string | null;
   action: string;
   old_value: any;
   new_value: any;
   created_at: string;
-  profiles?: UserProfile;
 }
 
 export interface ReleaseVersion {
@@ -94,7 +82,15 @@ export interface ReleaseVersion {
   mandatory: boolean;
   active: boolean;
   created_at: string;
-  products?: Product;
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+  };
 }
 
 export interface DashboardStats {
@@ -105,4 +101,17 @@ export interface DashboardStats {
   activeDevices: number;
   expiring7Days: number;
   expiring30Days: number;
+  recentActivationsCount?: number;
+}
+
+
+export interface ActivationLog {
+  id: string;
+  license_id: string;
+  device_id: string | null;
+  action: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  metadata?: any;
+  created_at: string;
 }
