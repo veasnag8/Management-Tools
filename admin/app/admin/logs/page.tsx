@@ -24,9 +24,13 @@ export default function LogsPage() {
   const supabase = getBrowserClient();
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
+  const [clearModalOpen, setClearModalOpen] = useState(false);
+  const [clearScope, setClearScope] = useState<'all' | 'client' | 'admin'>('all');
   const [activeTab, setActiveTab] = useState<'all' | 'client' | 'admin'>('all');
   const [search, setSearch] = useState('');
   const [selectedLog, setSelectedLog] = useState<LogItem | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -91,6 +95,53 @@ export default function LogsPage() {
     fetchLogs();
   }, [fetchLogs]);
 
+  const handleClearLogs = async () => {
+    setClearing(true);
+    try {
+      let apiSuccess = false;
+
+      // 1. Call Next.js API route (service role backed)
+      try {
+        const res = await fetch('/api/admin/logs/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: clearScope }),
+        });
+        const data = await res.json();
+        if (data?.success) {
+          apiSuccess = true;
+        }
+      } catch (apiErr) {
+        console.warn('API clear error, fallback to direct Supabase delete:', apiErr);
+      }
+
+      // 2. Direct client fallback if API route failed
+      if (!apiSuccess) {
+        if (clearScope === 'client') {
+          await supabase.from('activations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        } else if (clearScope === 'admin') {
+          await supabase.from('license_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        } else {
+          await Promise.all([
+            supabase.from('activations').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+            supabase.from('license_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+          ]);
+        }
+      }
+
+      setClearModalOpen(false);
+      setToastMessage('Activity logs cleared successfully.');
+      setTimeout(() => setToastMessage(null), 4000);
+      setLoading(true);
+      await fetchLogs();
+    } catch (err: any) {
+      console.error('Failed to clear logs:', err);
+      alert('Failed to clear logs: ' + (err.message || 'Unknown error'));
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const filteredLogs = logs.filter((log) => {
     if (activeTab === 'client' && log.type !== 'activation') return false;
     if (activeTab === 'admin' && log.type !== 'admin') return false;
@@ -107,6 +158,16 @@ export default function LogsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50 bg-emerald-500/90 text-slate-950 font-semibold px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md text-xs flex items-center space-x-2 animate-fadeIn">
+          <svg className="w-4 h-4 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -116,19 +177,39 @@ export default function LogsPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setLoading(true);
-            fetchLogs();
-          }}
-          className="inline-flex items-center space-x-2 px-3.5 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl transition-all self-start sm:self-auto"
-        >
-          <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span>Refresh Logs</span>
-        </button>
+        <div className="flex items-center space-x-3 self-start sm:self-auto">
+          {/* Refresh Logs Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              fetchLogs();
+            }}
+            className="inline-flex items-center space-x-2 px-3.5 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+          >
+            <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Refresh Logs</span>
+          </button>
+
+          {/* Clear Logs Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setClearScope(activeTab === 'client' ? 'client' : activeTab === 'admin' ? 'admin' : 'all');
+              setClearModalOpen(true);
+            }}
+            disabled={loading || clearing || logs.length === 0}
+            className="inline-flex items-center space-x-2 px-3.5 py-2 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-semibold rounded-xl transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Clear activity and telemetry logs"
+          >
+            <svg className="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Clear Logs</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Tab controls */}
@@ -256,6 +337,112 @@ export default function LogsPage() {
           </table>
         </div>
       </div>
+
+      {/* Confirmation Modal for Clear Logs */}
+      {clearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-start space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white">Clear Activity & Audit Logs</h3>
+                <p className="text-xs text-slate-400">
+                  This will permanently delete the recorded event logs from the database. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            {/* Scope Selection */}
+            <div className="space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                Select Scope to Clear:
+              </label>
+
+              <div className="space-y-1.5 text-xs">
+                <label className="flex items-center space-x-2.5 p-2 rounded-lg hover:bg-slate-900/80 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="clearScope"
+                    value="all"
+                    checked={clearScope === 'all'}
+                    onChange={() => setClearScope('all')}
+                    className="text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-700"
+                  />
+                  <div>
+                    <span className="text-white font-medium block">All Logs (Recommended)</span>
+                    <span className="text-slate-500 text-[11px]">Clear both client telemetry & admin audit events</span>
+                  </div>
+                </label>
+
+                <label className="flex items-center space-x-2.5 p-2 rounded-lg hover:bg-slate-900/80 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="clearScope"
+                    value="client"
+                    checked={clearScope === 'client'}
+                    onChange={() => setClearScope('client')}
+                    className="text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-700"
+                  />
+                  <div>
+                    <span className="text-white font-medium block">Client Telemetry Only</span>
+                    <span className="text-slate-500 text-[11px]">Clear activations, validations & heartbeats</span>
+                  </div>
+                </label>
+
+                <label className="flex items-center space-x-2.5 p-2 rounded-lg hover:bg-slate-900/80 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="clearScope"
+                    value="admin"
+                    checked={clearScope === 'admin'}
+                    onChange={() => setClearScope('admin')}
+                    className="text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-700"
+                  />
+                  <div>
+                    <span className="text-white font-medium block">Admin Audit Only</span>
+                    <span className="text-slate-500 text-[11px]">Clear admin configuration changes & actions</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setClearModalOpen(false)}
+                disabled={clearing}
+                className="px-4 py-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearLogs}
+                disabled={clearing}
+                className="inline-flex items-center space-x-2 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl shadow-lg shadow-rose-600/30 transition-all disabled:opacity-50"
+              >
+                {clearing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                    <span>Clearing...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>Confirm & Clear</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Payload Modal */}
       {selectedLog && (
