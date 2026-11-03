@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase/client';
 import { generateLicenseKey } from '@/lib/key-generator';
 import { Product } from '@/types';
 import Link from 'next/link';
+import { Calendar } from 'lucide-react';
 
 export default function NewLicensePage() {
   const router = useRouter();
   const supabase = getBrowserClient();
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
@@ -326,7 +328,21 @@ export default function NewLicensePage() {
               <button
                 key={option.id}
                 type="button"
-                onClick={() => setExpiryPreset(option.id as any)}
+                onClick={() => {
+                  setExpiryPreset(option.id as any);
+                  if (option.id === 'custom') {
+                    if (!customExpiryDate) {
+                      const defaultDate = new Date();
+                      defaultDate.setDate(defaultDate.getDate() + 30);
+                      setCustomExpiryDate(defaultDate.toISOString().split('T')[0]);
+                    }
+                    setTimeout(() => {
+                      try {
+                        dateInputRef.current?.showPicker?.();
+                      } catch {}
+                    }, 50);
+                  }
+                }}
                 className={`py-2 px-3 text-xs font-medium rounded-xl border transition-all ${
                   expiryPreset === option.id
                     ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 font-semibold'
@@ -340,14 +356,40 @@ export default function NewLicensePage() {
 
           {expiryPreset === 'custom' && (
             <div className="mt-3">
-              <input
-                type="date"
-                value={customExpiryDate}
-                onChange={(e) => setCustomExpiryDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                required
-                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 text-sm text-white transition-colors"
-              />
+              <div className="relative flex items-center">
+                <input
+                  ref={dateInputRef}
+                  type="date"
+                  value={customExpiryDate}
+                  onChange={(e) => setCustomExpiryDate(e.target.value)}
+                  onClick={() => {
+                    try {
+                      dateInputRef.current?.showPicker?.();
+                    } catch {}
+                  }}
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                  style={{ colorScheme: 'dark' }}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-2.5 pr-11 text-sm text-white transition-colors cursor-pointer [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      dateInputRef.current?.showPicker?.();
+                    } catch {}
+                    dateInputRef.current?.focus();
+                  }}
+                  className="absolute right-3 p-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-slate-800/60 transition-colors"
+                  title="Choose expiration date"
+                >
+                  <Calendar className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Click anywhere on the field or calendar icon to select an expiration date</span>
+              </p>
             </div>
           )}
         </div>
