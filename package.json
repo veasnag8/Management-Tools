@@ -11,6 +11,9 @@
     "node": ">=22.0.0"
   },
   "scripts": {
+    "build": "npm run build --workspace=admin",
+    "start": "npm run start --workspace=admin",
+    "dev": "npm run dev --workspace=admin",
     "dev:admin": "npm run dev --workspace=admin",
     "dev:worker": "npm run dev --workspace=worker",
     "build:admin": "npm run build --workspace=admin",
