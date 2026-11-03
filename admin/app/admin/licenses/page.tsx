@@ -8,7 +8,8 @@ import {
   Download,
   ExternalLink,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { StatusBadge } from '@/components/Badge';
 import { ConfirmationModal } from '@/components/ConfirmationModal';
@@ -127,6 +128,41 @@ export default function LicenseListPage() {
 
     setModalConfig({ ...modalConfig, isOpen: false });
     fetchLicenses();
+  };
+
+  const handleDeleteLicense = (lic: License) => {
+    setModalConfig({
+      isOpen: true,
+      title: 'Delete License Permanently',
+      message: `Are you sure you want to permanently delete license "${maskLicenseKey(lic.license_key)}" (${lic.customer_name || 'Anonymous'})? All registered devices and activation logs for this license will be permanently deleted.`,
+      confirmText: 'Delete License',
+      confirmVariant: 'danger',
+      action: async () => {
+        try {
+          let apiSuccess = false;
+          try {
+            const res = await fetch('/api/admin/licenses/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ licenseId: lic.id }),
+            });
+            const data = await res.json();
+            if (data?.success) apiSuccess = true;
+          } catch (apiErr) {
+            console.warn('API delete error, trying direct Supabase delete:', apiErr);
+          }
+
+          if (!apiSuccess) {
+            const supabase = createClient();
+            await supabase.from('licenses').delete().eq('id', lic.id);
+          }
+
+          await fetchLicenses();
+        } finally {
+          setModalConfig((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
   };
 
   const handleExport = () => {
@@ -265,10 +301,21 @@ export default function LicenseListPage() {
                   </td>
                   <td className="px-5 py-4 text-slate-500">{formatShortDate(lic.created_at)}</td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      <Link href={`/admin/licenses/${lic.id}`} className="px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                    <div className="flex items-center justify-end space-x-1.5">
+                      <Link
+                        href={`/admin/licenses/${lic.id}`}
+                        className="px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      >
                         Manage
                       </Link>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteLicense(lic)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Delete License"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>

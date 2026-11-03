@@ -87,6 +87,46 @@ export default function LicenseDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDeleteLicense = () => {
+    if (!license) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete License Permanently',
+      message: `Are you sure you want to permanently delete license "${license.license_key}"? All active device slots and validation records for this license will be removed. This cannot be undone.`,
+      variant: 'danger',
+      confirmText: 'Delete License',
+      onConfirm: async () => {
+        setActionLoading(true);
+        try {
+          let apiSuccess = false;
+          try {
+            const res = await fetch('/api/admin/licenses/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ licenseId: id }),
+            });
+            const data = await res.json();
+            if (data?.success) apiSuccess = true;
+          } catch (apiErr) {
+            console.warn('API delete error, falling back to direct delete:', apiErr);
+          }
+
+          if (!apiSuccess) {
+            await supabase.from('licenses').delete().eq('id', id);
+          }
+
+          router.push('/admin/licenses');
+        } catch (err: any) {
+          console.error('Failed to delete license:', err);
+          alert('Failed to delete license: ' + (err.message || 'Unknown error'));
+        } finally {
+          setActionLoading(false);
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
+  };
+
   const handleUpdateStatus = (newStatus: 'active' | 'disabled' | 'revoked') => {
     setConfirmModal({
       isOpen: true,
