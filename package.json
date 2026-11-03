@@ -7,6 +7,9 @@
     "admin",
     "worker"
   ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev:admin": "npm run dev --workspace=admin",
     "dev:worker": "npm run dev --workspace=worker",
