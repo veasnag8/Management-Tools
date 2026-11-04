@@ -33,3 +33,5 @@ windows-client/Tool/Tools/ffmpeg.exe
 windows-client/Tool/Tools/ffprobe.exe
 windows-client/bin/
 windows-client/Output/
+
+*.tsbuildinfo
