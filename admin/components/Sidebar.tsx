@@ -21,7 +21,7 @@ const navigation = [
   { name: 'Licenses', href: '/admin/licenses', icon: KeyRound },
   { name: 'Devices', href: '/admin/devices', icon: Laptop2 },
   { name: 'Products', href: '/admin/products', icon: Package },
-  { name: 'Releases', href: '/admin/releases', icon: Tag },
+  { name: 'Software Update Management', href: '/admin/releases', icon: Tag },
   { name: 'Activity Logs', href: '/admin/logs', icon: History },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
