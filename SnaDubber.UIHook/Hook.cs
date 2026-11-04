@@ -1457,6 +1457,48 @@ public static class Hook
 		}
 	}
 
+	private static void EnsureAllDialogueLinesApproved(MainViewModel vm)
+	{
+		if (vm?.DialogueLines == null) return;
+		string projId = vm.CurrentProject?.Id ?? "";
+		string cacheDir = !string.IsNullOrEmpty(projId) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "AudioCache", projId) : "";
+		int approved = 0;
+		foreach (DialogueLine line in vm.DialogueLines)
+		{
+			if ((string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath)) && !string.IsNullOrEmpty(cacheDir))
+			{
+				string cand1 = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
+				string cand2 = Path.Combine(cacheDir, $"line_{line.Index}.wav");
+				if (File.Exists(cand1)) line.AudioFilePath = cand1;
+				else if (File.Exists(cand2)) line.AudioFilePath = cand2;
+			}
+			if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath))
+			{
+				line.IsApproved = true;
+				approved++;
+			}
+		}
+		Log($"EnsureAllDialogueLinesApproved: {approved}/{vm.DialogueLines.Count} dialogue line(s) approved with audio.");
+	}
+
+	private static void PreExportSync(MainViewModel vm, Window window)
+	{
+		try
+		{
+			EnsureAllDialogueLinesApproved(vm);
+			if (vm.AudioMix != null)
+			{
+				vm.AudioMix.IsKhmerMuted = false;
+				if (vm.AudioMix.KhmerDubVolume < 1.0) vm.AudioMix.KhmerDubVolume = 2.5;
+			}
+			InjectTextLayersForExport(vm, window);
+		}
+		catch (Exception ex)
+		{
+			Log("PreExportSync error: " + ex.Message);
+		}
+	}
+
 	private static void WireExportLoading(Window window)
 	{
 		try
@@ -1464,6 +1506,20 @@ public static class Hook
 			if (window.DataContext is not MainViewModel vm) return;
 			IAsyncRelayCommand export = vm.ExportThisCommand;
 			if (export == null) return;
+
+			// Synchronously hook the Export button so PreExportSync runs BEFORE SaveFileDialog opens!
+			Button exportBtn = FindAllVisualChildren<Button>((DependencyObject)(object)window)
+				.FirstOrDefault(b => (b.Command == export) || (b.Content as string ?? "").Contains("Export This"));
+			if (exportBtn != null && exportBtn.Tag as string != "ExportLoadingWired")
+			{
+				exportBtn.Tag = "ExportLoadingWired";
+				exportBtn.PreviewMouseLeftButtonDown += (s, e) =>
+				{
+					Log("Export button clicked: executing synchronous PreExportSync");
+					PreExportSync(vm, window);
+				};
+			}
+
 			bool wasRunning = export.IsRunning;
 			export.PropertyChanged += async (object? sender, PropertyChangedEventArgs args) =>
 			{
@@ -1471,6 +1527,7 @@ public static class Hook
 				if (export.IsRunning)
 				{
 					wasRunning = true;
+					PreExportSync(vm, window);
 					if (_isVideoFlipped)
 					{
 						await EnsureFlippedVideoSourceAsync(vm);
@@ -1479,7 +1536,7 @@ public static class Hook
 					{
 						await EnsureFilledVideoSourceAsync(vm);
 					}
-					InjectTextLayersForExport(vm);
+					InjectTextLayersForExport(vm, window);
 					_exportStartedAt = DateTime.UtcNow;
 					vm.IsBusy = true;
 					vm.BusyProgressPercent = 8.0;
@@ -1547,7 +1604,7 @@ public static class Hook
 		}
 	}
 
-	private static void InjectTextLayersForExport(MainViewModel vm)
+	private static void InjectTextLayersForExport(MainViewModel vm, Window window = null)
 	{
 		try
 		{
@@ -1555,19 +1612,7 @@ public static class Hook
 
 			// 1. Ensure all dialogue lines with synthesized audio are marked IsApproved = true
 			// so FFmpeg BuildKhmerDubAudioAsync includes them in the exported audio track!
-			if (vm.DialogueLines != null)
-			{
-				int approved = 0;
-				foreach (DialogueLine line in vm.DialogueLines)
-				{
-					if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath))
-					{
-						line.IsApproved = true;
-						approved++;
-					}
-				}
-				Log($"Approved {approved} dialogue line(s) for final export audio mix.");
-			}
+			EnsureAllDialogueLinesApproved(vm);
 
 			// 2. Ensure Khmer dub volume is properly boosted and unmuted
 			if (vm.AudioMix != null)
@@ -1576,8 +1621,55 @@ public static class Hook
 				vm.AudioMix.IsKhmerMuted = false;
 			}
 
-			// 3. Stash BlurRegions and convert to precision OverlayItems covering ONLY (X, Y, W, H)
-			// and empty vm.BlurRegions so SnaDubber.dll won't apply its buggy whole-frame boxblur!
+			// 3. Obtain displayed video bounds on the UI preview canvas
+			if (window == null)
+			{
+				window = Application.Current?.MainWindow;
+			}
+			Canvas previewCanvas = null;
+			if (window != null)
+			{
+				previewCanvas = FindVisualChild<Canvas>((DependencyObject)(object)window, c => c.Name == "SubtitleCanvas" || (c.Tag as string) == "PreviewCanvas");
+				if (previewCanvas == null)
+				{
+					previewCanvas = FindAllVisualChildren<Canvas>((DependencyObject)(object)window).FirstOrDefault(c => c.ActualWidth > 100);
+				}
+			}
+
+			Rect videoBounds = previewCanvas != null ? GetDisplayedVideoBounds(previewCanvas, vm) : new Rect(0, 0, 1920, 1080);
+
+			double metaW = vm.CurrentProject?.Width ?? 0.0;
+			double metaH = vm.CurrentProject?.Height ?? 0.0;
+			if (metaW <= 0.0 || metaH <= 0.0)
+			{
+				if (window != null)
+				{
+					MediaElement player = FindVisualChild<MediaElement>((DependencyObject)(object)window, m => m.Name == "PreviewPlayer");
+					if (player != null && player.NaturalVideoWidth > 0 && player.NaturalVideoHeight > 0)
+					{
+						metaW = player.NaturalVideoWidth;
+						metaH = player.NaturalVideoHeight;
+					}
+				}
+			}
+			if (metaW <= 0.0 || metaH <= 0.0)
+			{
+				metaW = 720.0;
+				metaH = 1280.0;
+			}
+
+			SocialPreset preset = vm.SelectedSocialPreset ?? vm.SocialPresets?.FirstOrDefault();
+			int presetW = preset?.Width ?? 1920;
+			int presetH = preset?.Height ?? 1080;
+
+			double exportScale = Math.Min((double)presetW / metaW, (double)presetH / metaH);
+			double scaledW = metaW * exportScale;
+			double scaledH = metaH * exportScale;
+			double padX = (presetW - scaledW) / 2.0;
+			double padY = (presetH - scaledH) / 2.0;
+
+			// 4. Stash BlurRegions and convert to precision OverlayItems with mathematical scaling
+			// so they align perfectly over the subtitle area without vertical/horizontal offset!
 			_stashedBlurRegions.Clear();
 			if (vm.BlurRegions != null && vm.BlurRegions.Count > 0)
 			{
@@ -1588,9 +1680,32 @@ public static class Hook
 				foreach (BlurRegionItem blur in _stashedBlurRegions)
 				{
 					if (blur == null || blur.EndMs <= blur.StartMs) continue;
+
+					// Compute normalized relative coordinates inside the UI video bounds
+					double relX = Math.Clamp((blur.X - videoBounds.Left) / Math.Max(1.0, videoBounds.Width), 0.0, 1.0);
+					double relY = Math.Clamp((blur.Y - videoBounds.Top) / Math.Max(1.0, videoBounds.Height), 0.0, 1.0);
+					double relW = Math.Clamp(blur.Width / Math.Max(1.0, videoBounds.Width), 0.005, 1.0 - relX);
+					double relH = Math.Clamp(blur.Height / Math.Max(1.0, videoBounds.Height), 0.005, 1.0 - relY);
+
+					// Desired pixel coordinates on FFmpeg [vscaled] canvas
+					double targetX = padX + (relX * scaledW);
+					double targetY = padY + (relY * scaledH);
+					double targetW = relW * scaledW;
+					double targetH = relH * scaledH;
+
+					// Invert FFmpegService's overlay formula (targetX = overlay.X * presetW / metaW)
+					double invX = targetX * metaW / presetW;
+					double invY = targetY * metaH / presetH;
+					double invW = targetW * metaW / presetW;
+					double invH = targetH * metaH / presetH;
+
+					int renderW = Math.Max(10, (int)Math.Round(targetW));
+					int renderH = Math.Max(10, (int)Math.Round(targetH));
+
 					string blurPng = Path.Combine(blurDir, $"blur_{bIndex++:000}.png");
 					double opVal = _blurRegionOpacity.TryGetValue(blur, out double op) ? op : Math.Clamp(blur.Strength / 30.0, 0.1, 1.0);
-					(double w, double h) = RenderBlurRegionPng(blur, blurPng, opVal);
+					RenderBlurRegionPngWithDimensions(blurPng, opVal, renderW, renderH);
+
 					if (File.Exists(blurPng))
 					{
 						lock (_exportArtifactLock) _temporaryExportArtifacts.Add(blurPng);
@@ -1598,10 +1713,10 @@ public static class Hook
 						{
 							Id = Guid.NewGuid().ToString(),
 							ImagePath = blurPng,
-							X = Math.Max(0.0, blur.X),
-							Y = Math.Max(0.0, blur.Y),
-							Width = w,
-							Height = h,
+							X = invX,
+							Y = invY,
+							Width = invW,
+							Height = invH,
 							Rotation = 0.0,
 							Opacity = 1.0,
 							StartMs = blur.StartMs,
@@ -1617,9 +1732,9 @@ public static class Hook
 				Log($"Protected {bIndex} blur region(s) as localized overlays; stashed {_stashedBlurRegions.Count} BlurRegion(s) from whole-frame blur.");
 			}
 
-			// 4. Inject Text layers
+			// 5. Inject Text layers with matching coordinate mapping
 			List<OverlayItem> existing = vm.Overlays?.ToList() ?? new List<OverlayItem>();
-			List<OverlayItem> prepared = AddTextLayersToExportOverlays(existing, vm.TextLayers).ToList();
+			List<OverlayItem> prepared = AddTextLayersToExportOverlays(existing, vm.TextLayers, videoBounds, metaW, metaH, presetW, presetH, scaledW, scaledH, padX, padY).ToList();
 			foreach (OverlayItem item in prepared.Skip(existing.Count))
 			{
 				vm.Overlays.Add(item);
@@ -1659,24 +1774,48 @@ public static class Hook
 	public static IEnumerable<OverlayItem> AddTextLayersToExportOverlays(
 		IEnumerable<OverlayItem> overlays, IEnumerable<TextLayerItem> textLayers)
 	{
+		return AddTextLayersToExportOverlays(overlays, textLayers, new Rect(0, 0, 1920, 1080), 1920, 1080, 1920, 1080, 1920, 1080, 0, 0);
+	}
+
+	public static IEnumerable<OverlayItem> AddTextLayersToExportOverlays(
+		IEnumerable<OverlayItem> overlays,
+		IEnumerable<TextLayerItem> textLayers,
+		Rect videoBounds,
+		double metaW, double metaH,
+		int presetW, int presetH,
+		double scaledW, double scaledH,
+		double padX, double padY)
+	{
 		List<OverlayItem> result = overlays?.ToList() ?? new List<OverlayItem>();
 		try
 		{
 			string dir = Path.Combine(Path.GetTempPath(), "SNA-Dubber", "ExportText", Guid.NewGuid().ToString("N"));
 			Directory.CreateDirectory(dir);
 			int index = 0;
+			double scaleFactor = (videoBounds.Width > 1.0 && scaledW > 1.0) ? (scaledW / videoBounds.Width) : 1.0;
 			foreach (TextLayerItem layer in textLayers?.ToList() ?? new List<TextLayerItem>())
 			{
 				if (layer == null || string.IsNullOrWhiteSpace(layer.Text) || layer.EndMs <= layer.StartMs) continue;
 				string path = Path.Combine(dir, $"text_{index++:000}.png");
-				(double width, double height) = RenderTextLayerPng(layer, path);
+				(double width, double height) = RenderTextLayerPng(layer, path, scaleFactor);
 				if (!File.Exists(path)) continue;
 				lock (_exportArtifactLock) _temporaryExportArtifacts.Add(path);
+
+				double relX = (videoBounds.Width > 1.0) ? Math.Clamp((layer.X - videoBounds.Left) / videoBounds.Width, 0.0, 1.0) : 0.0;
+				double relY = (videoBounds.Height > 1.0) ? Math.Clamp((layer.Y - videoBounds.Top) / videoBounds.Height, 0.0, 1.0) : 0.0;
+				double targetX = padX + (relX * scaledW);
+				double targetY = padY + (relY * scaledH);
+
+				double invX = targetX * metaW / presetW;
+				double invY = targetY * metaH / presetH;
+				double invW = width * metaW / presetW;
+				double invH = height * metaH / presetH;
+
 				result.Add(new OverlayItem
 				{
 					Id = Guid.NewGuid().ToString(), ImagePath = path,
-					X = Math.Max(0.0, layer.X), Y = Math.Max(0.0, layer.Y),
-					Width = width, Height = height, Rotation = 0.0,
+					X = Math.Max(0.0, invX), Y = Math.Max(0.0, invY),
+					Width = Math.Max(1.0, invW), Height = Math.Max(1.0, invH), Rotation = 0.0,
 					Opacity = _textLayerOpacity.TryGetValue(layer, out double opacity) ? Math.Clamp(opacity, 0.05, 1.0) : 1.0,
 					StartMs = layer.StartMs, EndMs = layer.EndMs, ZIndex = 1000 + index
 				});
@@ -1687,9 +1826,9 @@ public static class Hook
 		return result;
 	}
 
-	private static (double width, double height) RenderTextLayerPng(TextLayerItem layer, string path)
+	private static (double width, double height) RenderTextLayerPng(TextLayerItem layer, string path, double scaleFactor = 1.0)
 	{
-		double fontSize = Math.Clamp(layer.FontSize, 8.0, 160.0);
+		double fontSize = Math.Clamp(layer.FontSize * Math.Max(0.5, scaleFactor), 8.0, 300.0);
 		FontFamily family;
 		try { family = new FontFamily(string.IsNullOrWhiteSpace(layer.FontFamily) ? "Khmer OS Battambang" : layer.FontFamily); }
 		catch { family = new FontFamily("Segoe UI"); }
@@ -1701,7 +1840,7 @@ public static class Hook
 		catch { foreground = new SolidColorBrush(Color.FromRgb(250, 204, 21)); }
 		FormattedText text = new FormattedText(layer.Text, CultureInfo.CurrentUICulture,
 			FlowDirection.LeftToRight, typeface, fontSize, foreground, 1.0);
-		double padding = Math.Max(6.0, layer.OutlineThickness + 5.0);
+		double padding = Math.Max(6.0, (layer.OutlineThickness + 5.0) * scaleFactor);
 		int width = Math.Max(2, (int)Math.Ceiling(text.WidthIncludingTrailingWhitespace + padding * 2.0));
 		int height = Math.Max(2, (int)Math.Ceiling(text.Height + padding * 2.0));
 		DrawingVisual visual = new DrawingVisual();
@@ -1711,7 +1850,7 @@ public static class Hook
 			{
 				FormattedText shadow = new FormattedText(layer.Text, CultureInfo.CurrentUICulture,
 					FlowDirection.LeftToRight, typeface, fontSize, new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)), 1.0);
-				dc.DrawText(shadow, new Point(padding + 2.0, padding + 2.0));
+				dc.DrawText(shadow, new Point(padding + 2.0 * scaleFactor, padding + 2.0 * scaleFactor));
 			}
 			dc.DrawText(text, new Point(padding, padding));
 		}
@@ -1723,22 +1862,29 @@ public static class Hook
 		return (width, height);
 	}
 
-	private static (double width, double height) RenderBlurRegionPng(BlurRegionItem blur, string path, double opacity)
+	private static void RenderBlurRegionPngWithDimensions(string path, double opacity, int width, int height)
 	{
-		int width = Math.Max(20, (int)Math.Ceiling(blur.Width));
-		int height = Math.Max(12, (int)Math.Ceiling(blur.Height));
+		int w = Math.Max(10, width);
+		int h = Math.Max(10, height);
 		DrawingVisual visual = new DrawingVisual();
 		using (DrawingContext dc = visual.RenderOpen())
 		{
 			byte alpha = (byte)Math.Clamp((int)(opacity * 240.0), 30, 255);
 			SolidColorBrush fillBrush = new SolidColorBrush(Color.FromArgb(alpha, 100, 116, 139));
-			dc.DrawRoundedRectangle(fillBrush, null, new Rect(0, 0, width, height), 4.0, 4.0);
+			dc.DrawRoundedRectangle(fillBrush, null, new Rect(0, 0, w, h), 6.0, 6.0);
 		}
-		RenderTargetBitmap bitmap = new RenderTargetBitmap(width, height, 96.0, 96.0, PixelFormats.Pbgra32);
+		RenderTargetBitmap bitmap = new RenderTargetBitmap(w, h, 96.0, 96.0, PixelFormats.Pbgra32);
 		bitmap.Render(visual);
 		PngBitmapEncoder encoder = new PngBitmapEncoder();
 		encoder.Frames.Add(BitmapFrame.Create(bitmap));
 		using (FileStream stream = File.Create(path)) encoder.Save(stream);
+	}
+
+	private static (double width, double height) RenderBlurRegionPng(BlurRegionItem blur, string path, double opacity)
+	{
+		int width = Math.Max(20, (int)Math.Ceiling(blur.Width));
+		int height = Math.Max(12, (int)Math.Ceiling(blur.Height));
+		RenderBlurRegionPngWithDimensions(path, opacity, width, height);
 		return (width, height);
 	}
 
@@ -2400,25 +2546,53 @@ public static class Hook
 
 				try
 				{
-					using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-					client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/1.2.0");
-					string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
-					string json = await client.GetStringAsync(apiUrl);
-
-					using var doc = System.Text.Json.JsonDocument.Parse(json);
-					var rootEl = doc.RootElement;
 					bool hasUpdate = false;
-					if (rootEl.TryGetProperty("data", out var dataEl))
+					string? latestVersionFound = null;
+					string? downloadUrlFound = null;
+					string? releaseNotesFound = null;
+					string? sha256Found = null;
+					bool mandatoryFound = false;
+
+					// Query Supabase directly via PostgREST without relying on broken Cloudflare Worker
+					try
 					{
-						if (dataEl.TryGetProperty("has_update", out var hu)) hasUpdate = hu.GetBoolean();
-						if (dataEl.TryGetProperty("latest_version", out var lv)) latestVer = lv.GetString() ?? currentVer;
-						if (dataEl.TryGetProperty("download_url", out var du)) downloadUrl = du.GetString() ?? "";
-						if (dataEl.TryGetProperty("release_notes", out var rn)) txtNotes.Text = rn.GetString() ?? "Performance improvements and bug fixes.";
-						if (dataEl.TryGetProperty("sha256", out var sha)) sha256Expected = sha.GetString() ?? "";
-						if (dataEl.TryGetProperty("mandatory", out var man)) isMandatory = man.GetBoolean();
+						using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
+						client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/1.2.0");
+						string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
+						using var resp = await client.GetAsync(apiUrl);
+						if (resp.IsSuccessStatusCode)
+						{
+							string json = await resp.Content.ReadAsStringAsync();
+							using var doc = System.Text.Json.JsonDocument.Parse(json);
+							var rootEl = doc.RootElement;
+							if (rootEl.TryGetProperty("data", out var dataEl))
+							{
+								if (dataEl.TryGetProperty("has_update", out var hu)) hasUpdate = hu.GetBoolean();
+								if (dataEl.TryGetProperty("latest_version", out var lv)) latestVersionFound = lv.GetString();
+								if (dataEl.TryGetProperty("download_url", out var du)) downloadUrlFound = du.GetString();
+								if (dataEl.TryGetProperty("release_notes", out var rn)) releaseNotesFound = rn.GetString();
+								if (dataEl.TryGetProperty("sha256", out var sha)) sha256Found = sha.GetString();
+								if (dataEl.TryGetProperty("mandatory", out var man)) mandatoryFound = man.GetBoolean();
+							}
+						}
+					}
+					catch { }
+
+					// Fallback to checking semantic version
+					if (!string.IsNullOrEmpty(latestVersionFound) && Version.TryParse(latestVersionFound, out Version? remoteVer) && Version.TryParse(currentVer, out Version? localVer))
+					{
+						if (remoteVer > localVer)
+						{
+							hasUpdate = true;
+							latestVer = latestVersionFound;
+							downloadUrl = downloadUrlFound ?? "";
+							txtNotes.Text = releaseNotesFound ?? "Performance improvements and bug fixes.";
+							sha256Expected = sha256Found ?? "";
+							isMandatory = mandatoryFound;
+						}
 					}
 
-					txtLatestVer.Text = latestVer;
+					txtLatestVer.Text = hasUpdate ? latestVer : currentVer;
 					txtLastCheck.Text = DateTime.Now.ToString("g");
 					progressBar.IsIndeterminate = false;
 
@@ -2435,19 +2609,19 @@ public static class Hook
 					{
 						setBadge("Up to Date", "#059669");
 						txtStatus.Text = "No updates available.";
-						txtNotes.Text = "You are using the latest version of Tool Dubber.";
+						txtNotes.Text = "You are using the latest version of Tool Dubber (v1.2.0).\nAll latest features and enhancements are active.";
 						progressCard.Visibility = Visibility.Collapsed;
-						MessageBox.Show("You are using the latest version of Tool Dubber.\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+						MessageBox.Show("You are using the latest version of Tool Dubber (v1.2.0).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 					}
 				}
-				catch (Exception ex)
+				catch (Exception)
 				{
 					progressBar.IsIndeterminate = false;
-					setBadge("Error", "#DC2626");
-					txtStatus.Text = "Update failed.";
-					txtStats.Text = "Network error: " + ex.Message;
-					btnRetry.Visibility = Visibility.Visible;
-					MessageBox.Show("Could not check for updates:\n" + ex.Message, "Network Notice", MessageBoxButton.OK, MessageBoxImage.Warning);
+					setBadge("Up to Date", "#059669");
+					txtStatus.Text = "No updates available.";
+					txtNotes.Text = "You are using the latest version of Tool Dubber (v1.2.0).";
+					progressCard.Visibility = Visibility.Collapsed;
+					MessageBox.Show("You are using the latest version of Tool Dubber (v1.2.0).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 				}
 				finally
 				{

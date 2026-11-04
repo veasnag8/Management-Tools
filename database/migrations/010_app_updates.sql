@@ -77,3 +77,4 @@ VALUES (
     'published',
     now()
 ) ON CONFLICT (product_code, version) DO NOTHING;
+
