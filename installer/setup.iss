@@ -1,44 +1,45 @@
 ; Script generated for Inno Setup 6
-; Software Licensing Platform & KN 3in1 Pro Windows Installer
+; Tool Dubber Windows Installer v2.0.0
 
-#define MyAppName "KN 3in1 Pro - Drama Manager"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "License Platform Technologies"
-#define MyAppURL "https://example.com"
-#define MyAppExeName "Tool.exe"
+#define MyAppName "Tool Dubber"
+#define MyAppVersion "2.0.0"
+#define MyAppPublisher "SNA Studio"
+#define MyAppExeName "SnaDubber.exe"
+#define MyAppSourceDir "D:\Project\Release_v1.2.0\SNA-Dubber"
+#define MyOutputDir "D:\Project\Release_v1.2.0\Output"
 
 [Setup]
-AppId={{D89B5F84-3A9B-4D21-86EF-72535F2B5B01}
+AppId={{8B1B6CE7-3FD4-411A-B472-E40B7EE84920}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppPublisherURL={#MyAppURL}
-AppSupportURL={#MyAppURL}
-AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
 DefaultGroupName={#MyAppName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
-OutputDir=..\installer\Output
-OutputBaseFilename=ToolSetup-{#MyAppVersion}
+OutputDir={#MyOutputDir}
+OutputBaseFilename=ToolDubber-Setup-v{#MyAppVersion}
+SetupIconFile={#MyAppSourceDir}\Assets\app.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+CloseApplications=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 
 [Files]
-Source: "..\windows-client\Tool\bin\Publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MyAppSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "hook.log,*.pdb,*.tmp,FilledCache\*,FlippedCache\*,PreviewCache\*"
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Assets\app.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Assets\app.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

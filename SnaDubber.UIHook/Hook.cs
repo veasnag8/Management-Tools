@@ -313,7 +313,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 1.2.0";
+			window.Title = "SNA-Dubber Version 2.0.0";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -355,9 +355,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 1.2.0", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, "SNA-Dubber Version 2.0.0", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 1.2.0";
+				window.Title = "SNA-Dubber Version 2.0.0";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -2343,7 +2343,7 @@ public static class Hook
 
 			StackPanel curVerCol = new StackPanel();
 			curVerCol.Children.Add(new TextBlock { Text = "CURRENT VERSION", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)) });
-			TextBlock txtCurVer = new TextBlock { Text = "1.2.0", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
+			TextBlock txtCurVer = new TextBlock { Text = "2.0.0", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
 			curVerCol.Children.Add(txtCurVer);
 			infoGrid.Children.Add(curVerCol);
 
@@ -2521,7 +2521,7 @@ public static class Hook
 			dialog.Content = root;
 
 			// Logic & State
-			string currentVer = "1.2.0";
+			string currentVer = "2.0.0";
 			string latestVer = currentVer;
 			string downloadUrl = "";
 			string sha256Expected = "";
@@ -2557,7 +2557,7 @@ public static class Hook
 					try
 					{
 						using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-						client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/1.2.0");
+						client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.0");
 						string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 						using var resp = await client.GetAsync(apiUrl);
 						if (resp.IsSuccessStatusCode)
@@ -2609,9 +2609,9 @@ public static class Hook
 					{
 						setBadge("Up to Date", "#059669");
 						txtStatus.Text = "No updates available.";
-						txtNotes.Text = "You are using the latest version of Tool Dubber (v1.2.0).\nAll latest features and enhancements are active.";
+						txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.0).\nAll latest features and enhancements are active.";
 						progressCard.Visibility = Visibility.Collapsed;
-						MessageBox.Show("You are using the latest version of Tool Dubber (v1.2.0).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+						MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.0).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 					}
 				}
 				catch (Exception)
@@ -2619,9 +2619,9 @@ public static class Hook
 					progressBar.IsIndeterminate = false;
 					setBadge("Up to Date", "#059669");
 					txtStatus.Text = "No updates available.";
-					txtNotes.Text = "You are using the latest version of Tool Dubber (v1.2.0).";
+					txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.0).";
 					progressCard.Visibility = Visibility.Collapsed;
-					MessageBox.Show("You are using the latest version of Tool Dubber (v1.2.0).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+					MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.0).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 				}
 				finally
 				{
@@ -2656,7 +2656,7 @@ public static class Hook
 				try
 				{
 					using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-					http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/1.2.0");
+					http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.0");
 
 					using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 					resp.EnsureSuccessStatusCode();
