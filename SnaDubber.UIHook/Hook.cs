@@ -118,6 +118,11 @@ public static class Hook
 
 	private static readonly Dictionary<BlurRegionItem, double> _blurRegionOpacity = new();
 
+	private static readonly Dictionary<BlurRegionItem, (double relX, double relY, double relW, double relH)> _blurNormalizedCoords = new();
+	private static readonly Dictionary<string, (double relX, double relY, double relW, double relH)> _blurNormalizedCoordsById = new();
+
+	private static Rect _lastActiveVideoBounds = Rect.Empty;
+
 	private static bool _isBlurToolHooked = false;
 
 	private static bool _isOutsideDeselectHooked = false;
@@ -633,6 +638,11 @@ public static class Hook
 			}
 			else if (e.PropertyName == "IsExporting" || e.PropertyName == "IsBusy")
 			{
+				if (e.PropertyName == "IsExporting" && vm.IsExporting)
+				{
+					PreExportSync(vm, window);
+				}
+
 				// If admin revoked while generating/exporting, wait until current task completes, then lock immediately!
 				if (_pendingRevocationAfterCurrentTask && !IsGeneratingOrExporting(vm))
 				{
@@ -1457,27 +1467,100 @@ public static class Hook
 		}
 	}
 
+	private static (int width, int height) ProbeVideoSize(string videoPath)
+	{
+		try
+		{
+			if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath)) return (0, 0);
+			string ffprobe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", "ffprobe.exe");
+			if (!File.Exists(ffprobe)) ffprobe = "ffprobe";
+			var psi = new ProcessStartInfo
+			{
+				FileName = ffprobe,
+				Arguments = $"-v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 \"{videoPath}\"",
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true
+			};
+			using var proc = Process.Start(psi);
+			if (proc != null)
+			{
+				string output = proc.StandardOutput.ReadToEnd()?.Trim();
+				proc.WaitForExit();
+				if (!string.IsNullOrEmpty(output) && output.Contains('x'))
+				{
+					string[] parts = output.Split('x');
+					if (int.TryParse(parts[0], out int w) && int.TryParse(parts[1], out int h))
+					{
+						return (w, h);
+					}
+				}
+			}
+		}
+		catch { }
+		return (0, 0);
+	}
+
 	private static void EnsureAllDialogueLinesApproved(MainViewModel vm)
 	{
-		if (vm?.DialogueLines == null) return;
+		if (vm?.DialogueLines == null || vm.DialogueLines.Count == 0) return;
 		string projId = vm.CurrentProject?.Id ?? "";
 		string cacheDir = !string.IsNullOrEmpty(projId) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "AudioCache", projId) : "";
+		if (!string.IsNullOrEmpty(cacheDir)) Directory.CreateDirectory(cacheDir);
+
 		int approved = 0;
+		List<DialogueLine> missingAudioLines = new List<DialogueLine>();
+
 		foreach (DialogueLine line in vm.DialogueLines)
 		{
-			if ((string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath)) && !string.IsNullOrEmpty(cacheDir))
+			if ((string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath) || new FileInfo(line.AudioFilePath).Length < 100) && !string.IsNullOrEmpty(cacheDir))
 			{
 				string cand1 = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
 				string cand2 = Path.Combine(cacheDir, $"line_{line.Index}.wav");
-				if (File.Exists(cand1)) line.AudioFilePath = cand1;
-				else if (File.Exists(cand2)) line.AudioFilePath = cand2;
+				if (File.Exists(cand1) && new FileInfo(cand1).Length > 100) line.AudioFilePath = cand1;
+				else if (File.Exists(cand2) && new FileInfo(cand2).Length > 100) line.AudioFilePath = cand2;
 			}
-			if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath))
+			if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath) && new FileInfo(line.AudioFilePath).Length > 100)
 			{
 				line.IsApproved = true;
 				approved++;
 			}
+			else
+			{
+				string txt = !string.IsNullOrWhiteSpace(line.CorrectedKhmer) ? line.CorrectedKhmer : line.DraftKhmer;
+				if (!string.IsNullOrWhiteSpace(txt)) missingAudioLines.Add(line);
+			}
 		}
+
+		if (missingAudioLines.Count > 0 && !string.IsNullOrEmpty(cacheDir))
+		{
+			Log($"EnsureAllDialogueLinesApproved: Auto-synthesizing {missingAudioLines.Count} missing Khmer voice line(s) before export...");
+			foreach (DialogueLine line in missingAudioLines)
+			{
+				try
+				{
+					string text = !string.IsNullOrWhiteSpace(line.CorrectedKhmer) ? line.CorrectedKhmer : line.DraftKhmer;
+					string voice = string.IsNullOrWhiteSpace(line.VoiceProfile) ? "piset" : line.VoiceProfile;
+					string outPath = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
+					double speed = line.Speed > 0.1 ? line.Speed : 1.0;
+					double volume = line.Volume > 0.1 ? line.Volume : 1.0;
+					int pitch = line.Pitch;
+
+					bool ok = RunDirectPythonTtsAsync(text, outPath, voice, speed, volume, pitch).GetAwaiter().GetResult();
+					if (ok && File.Exists(outPath) && new FileInfo(outPath).Length > 100)
+					{
+						line.AudioFilePath = outPath;
+						line.IsApproved = true;
+						approved++;
+					}
+				}
+				catch (Exception ex)
+				{
+					Log($"Auto-synthesis for line {line.Index} error: {ex.Message}");
+				}
+			}
+		}
+
 		Log($"EnsureAllDialogueLinesApproved: {approved}/{vm.DialogueLines.Count} dialogue line(s) approved with audio.");
 	}
 
@@ -1485,12 +1568,41 @@ public static class Hook
 	{
 		try
 		{
+			if (_originalVideoSourcePath != null && File.Exists(_originalVideoSourcePath))
+			{
+				if (vm.SelectedSocialPreset?.AspectRatioText != "16:9" || !_isFrameFillMode)
+				{
+					vm.CurrentProject.VideoPath = _originalVideoSourcePath;
+				}
+			}
+
 			EnsureAllDialogueLinesApproved(vm);
+
 			if (vm.AudioMix != null)
 			{
+				// MUTE THE ORIGINAL CHINESE TALKING COMPLETELY
+				vm.AudioMix.IsOriginalMuted = true;
+				vm.AudioMix.OriginalAudioVolume = 0.0;
+
+				// UNMUTE AND BOOST KHMER TRANSLATED DUBBING
 				vm.AudioMix.IsKhmerMuted = false;
-				if (vm.AudioMix.KhmerDubVolume < 1.0) vm.AudioMix.KhmerDubVolume = 2.5;
+				if (vm.AudioMix.KhmerDubVolume < 1.0) vm.AudioMix.KhmerDubVolume = 2.8;
+
+				// ATTACH SEPARATED BGM TRACK IF AVAILABLE SO MUSIC REMAINS
+				string projId = vm.CurrentProject?.Id ?? "";
+				if (!string.IsNullOrEmpty(projId))
+				{
+					string bgmTrack = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "SeparatedAudio", projId, "bgm_track.wav");
+					if (File.Exists(bgmTrack))
+					{
+						vm.AudioMix.BgmTrackPath = bgmTrack;
+						vm.AudioMix.IsBgmMuted = false;
+						if (vm.AudioMix.BgmVolume <= 0.05) vm.AudioMix.BgmVolume = 0.25;
+						Log($"PreExportSync: Attached background music track: {bgmTrack}");
+					}
+				}
 			}
+
 			InjectTextLayersForExport(vm, window);
 		}
 		catch (Exception ex)
@@ -1509,13 +1621,29 @@ public static class Hook
 
 			// Synchronously hook the Export button so PreExportSync runs BEFORE SaveFileDialog opens!
 			Button exportBtn = FindAllVisualChildren<Button>((DependencyObject)(object)window)
-				.FirstOrDefault(b => (b.Command == export) || (b.Content as string ?? "").Contains("Export This"));
+				.FirstOrDefault(b => (b.Command == export) 
+					|| (b.ToolTip as string ?? "").IndexOf("Export current video", StringComparison.OrdinalIgnoreCase) >= 0
+					|| FindVisualChild(b, (TextBlock tb) => tb.Text != null && tb.Text.Contains("Export This")) != null);
 			if (exportBtn != null && exportBtn.Tag as string != "ExportLoadingWired")
 			{
 				exportBtn.Tag = "ExportLoadingWired";
 				exportBtn.PreviewMouseLeftButtonDown += (s, e) =>
 				{
 					Log("Export button clicked: executing synchronous PreExportSync");
+					PreExportSync(vm, window);
+				};
+			}
+
+			Button exportAllBtn = FindAllVisualChildren<Button>((DependencyObject)(object)window)
+				.FirstOrDefault(b => (b.Command == vm.ExportAllCommand)
+					|| (b.ToolTip as string ?? "").IndexOf("Batch render", StringComparison.OrdinalIgnoreCase) >= 0
+					|| FindVisualChild(b, (TextBlock tb) => tb.Text != null && tb.Text.Contains("Export All")) != null);
+			if (exportAllBtn != null && exportAllBtn.Tag as string != "ExportAllLoadingWired")
+			{
+				exportAllBtn.Tag = "ExportAllLoadingWired";
+				exportAllBtn.PreviewMouseLeftButtonDown += (s, e) =>
+				{
+					Log("Export All button clicked: executing synchronous PreExportSync");
 					PreExportSync(vm, window);
 				};
 			}
@@ -1629,28 +1757,42 @@ public static class Hook
 			Canvas previewCanvas = null;
 			if (window != null)
 			{
-				previewCanvas = FindVisualChild<Canvas>((DependencyObject)(object)window, c => c.Name == "SubtitleCanvas" || (c.Tag as string) == "PreviewCanvas");
+				previewCanvas = FindVisualChild<Canvas>((DependencyObject)(object)window, c => c.Name == "OverlayCanvas");
 				if (previewCanvas == null)
 				{
 					previewCanvas = FindAllVisualChildren<Canvas>((DependencyObject)(object)window).FirstOrDefault(c => c.ActualWidth > 100);
 				}
 			}
 
-			Rect videoBounds = previewCanvas != null ? GetDisplayedVideoBounds(previewCanvas, vm) : new Rect(0, 0, 1920, 1080);
+			Rect videoBounds = (previewCanvas != null && previewCanvas.ActualWidth > 10.0)
+				? GetDisplayedVideoBounds(previewCanvas, vm)
+				: (_lastActiveVideoBounds.Width > 10.0 ? _lastActiveVideoBounds : new Rect(0, 0, 1920, 1080));
 
-			double metaW = vm.CurrentProject?.Width ?? 0.0;
-			double metaH = vm.CurrentProject?.Height ?? 0.0;
-			if (metaW <= 0.0 || metaH <= 0.0)
+			double metaW = 0.0;
+			double metaH = 0.0;
+			string vPath = vm.CurrentProject?.VideoPath;
+			if (!string.IsNullOrEmpty(vPath) && File.Exists(vPath))
 			{
-				if (window != null)
+				(int pw, int ph) = ProbeVideoSize(vPath);
+				if (pw > 0 && ph > 0)
 				{
-					MediaElement player = FindVisualChild<MediaElement>((DependencyObject)(object)window, m => m.Name == "PreviewPlayer");
-					if (player != null && player.NaturalVideoWidth > 0 && player.NaturalVideoHeight > 0)
-					{
-						metaW = player.NaturalVideoWidth;
-						metaH = player.NaturalVideoHeight;
-					}
+					metaW = pw;
+					metaH = ph;
 				}
+			}
+			if ((metaW <= 0.0 || metaH <= 0.0) && window != null)
+			{
+				MediaElement player = FindVisualChild<MediaElement>((DependencyObject)(object)window, m => m.Name == "PreviewPlayer");
+				if (player != null && player.NaturalVideoWidth > 0 && player.NaturalVideoHeight > 0)
+				{
+					metaW = player.NaturalVideoWidth;
+					metaH = player.NaturalVideoHeight;
+				}
+			}
+			if ((metaW <= 0.0 || metaH <= 0.0) && vm.CurrentProject != null)
+			{
+				metaW = vm.CurrentProject.Width;
+				metaH = vm.CurrentProject.Height;
 			}
 			if (metaW <= 0.0 || metaH <= 0.0)
 			{
@@ -1682,16 +1824,41 @@ public static class Hook
 					if (blur == null || blur.EndMs <= blur.StartMs) continue;
 
 					// Compute normalized relative coordinates inside the UI video bounds
-					double relX = Math.Clamp((blur.X - videoBounds.Left) / Math.Max(1.0, videoBounds.Width), 0.0, 1.0);
-					double relY = Math.Clamp((blur.Y - videoBounds.Top) / Math.Max(1.0, videoBounds.Height), 0.0, 1.0);
-					double relW = Math.Clamp(blur.Width / Math.Max(1.0, videoBounds.Width), 0.005, 1.0 - relX);
-					double relH = Math.Clamp(blur.Height / Math.Max(1.0, videoBounds.Height), 0.005, 1.0 - relY);
+					double relX = 0.0, relY = 0.0, relW = 0.0, relH = 0.0;
+					bool hasNorm = false;
+					if (_blurNormalizedCoords.TryGetValue(blur, out var normCoords))
+					{
+						relX = normCoords.relX;
+						relY = normCoords.relY;
+						relW = normCoords.relW;
+						relH = normCoords.relH;
+						hasNorm = true;
+					}
+					else if (!string.IsNullOrEmpty(blur.Id) && _blurNormalizedCoordsById.TryGetValue(blur.Id, out var idCoords))
+					{
+						relX = idCoords.relX;
+						relY = idCoords.relY;
+						relW = idCoords.relW;
+						relH = idCoords.relH;
+						hasNorm = true;
+					}
+
+					if (!hasNorm)
+					{
+						Rect refBounds = (videoBounds.Width > 10.0 && videoBounds.Height > 10.0)
+							? videoBounds
+							: (_lastActiveVideoBounds.Width > 10.0 ? _lastActiveVideoBounds : new Rect(0, 0, Math.Max(1.0, blur.X + blur.Width), Math.Max(1.0, blur.Y + blur.Height)));
+						relX = Math.Clamp((blur.X - refBounds.Left) / Math.Max(1.0, refBounds.Width), 0.0, 1.0);
+						relY = Math.Clamp((blur.Y - refBounds.Top) / Math.Max(1.0, refBounds.Height), 0.0, 1.0);
+						relW = Math.Clamp(blur.Width / Math.Max(1.0, refBounds.Width), 0.005, 1.0 - relX);
+						relH = Math.Clamp(blur.Height / Math.Max(1.0, refBounds.Height), 0.005, 1.0 - relY);
+					}
 
 					// Desired pixel coordinates on FFmpeg [vscaled] canvas
 					double targetX = padX + (relX * scaledW);
 					double targetY = padY + (relY * scaledH);
-					double targetW = relW * scaledW;
-					double targetH = relH * scaledH;
+					double targetW = Math.Max(10.0, relW * scaledW);
+					double targetH = Math.Max(8.0, relH * scaledH);
 
 					// Invert FFmpegService's overlay formula (targetX = overlay.X * presetW / metaW)
 					double invX = targetX * metaW / presetW;
@@ -1700,7 +1867,7 @@ public static class Hook
 					double invH = targetH * metaH / presetH;
 
 					int renderW = Math.Max(10, (int)Math.Round(targetW));
-					int renderH = Math.Max(10, (int)Math.Round(targetH));
+					int renderH = Math.Max(8, (int)Math.Round(targetH));
 
 					string blurPng = Path.Combine(blurDir, $"blur_{bIndex++:000}.png");
 					double opVal = _blurRegionOpacity.TryGetValue(blur, out double op) ? op : Math.Clamp(blur.Strength / 30.0, 0.1, 1.0);
@@ -1713,10 +1880,10 @@ public static class Hook
 						{
 							Id = Guid.NewGuid().ToString(),
 							ImagePath = blurPng,
-							X = invX,
-							Y = invY,
-							Width = invW,
-							Height = invH,
+							X = Math.Max(0.0, invX),
+							Y = Math.Max(0.0, invY),
+							Width = Math.Max(1.0, invW),
+							Height = Math.Max(1.0, invH),
 							Rotation = 0.0,
 							Opacity = 1.0,
 							StartMs = blur.StartMs,
@@ -4432,10 +4599,15 @@ del ""%~f0""
 		try
 		{
 			string fileName = "python";
+			string winAppsPy = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps", "python.exe");
+			if (File.Exists(winAppsPy)) fileName = winAppsPy;
+
 			string text2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Engine", "engine_main.py");
 			if (!File.Exists(text2))
 			{
-				return false;
+				string alt = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Engine", "engine_main.py");
+				if (File.Exists(alt)) text2 = alt;
+				else return false;
 			}
 			string contents = JsonSerializer.Serialize(new
 			{
@@ -10482,6 +10654,7 @@ del ""%~f0""
 
 					BlurRegionItem blur = new BlurRegionItem
 					{
+						Id = Guid.NewGuid().ToString(),
 						X = defX,
 						Y = defY,
 						Width = defW,
@@ -10493,6 +10666,18 @@ del ""%~f0""
 					};
 
 					_blurRegionOpacity[blur] = chosenOp;
+					if (bounds.Width > 10.0 && bounds.Height > 10.0)
+					{
+						_lastActiveVideoBounds = bounds;
+						var norm = (
+							Math.Clamp((defX - bounds.Left) / bounds.Width, 0.0, 1.0),
+							Math.Clamp((defY - bounds.Top) / bounds.Height, 0.0, 1.0),
+							Math.Clamp(defW / bounds.Width, 0.005, 1.0),
+							Math.Clamp(defH / bounds.Height, 0.005, 1.0)
+						);
+						_blurNormalizedCoords[blur] = norm;
+						_blurNormalizedCoordsById[blur.Id] = norm;
+					}
 					vm.BlurRegions.Add(blur);
 					vm.SelectedBlurRegion = blur;
 					_selectedTimelineBlurRegions.Clear();
@@ -10517,6 +10702,33 @@ del ""%~f0""
 		}
 	}
 
+	private static void UpdateBlurNormalizedCoordinates(BlurRegionItem blur, Canvas canvas, MainViewModel vm)
+	{
+		if (blur == null) return;
+		Rect bounds = Rect.Empty;
+		if (canvas != null && canvas.ActualWidth > 10.0 && canvas.ActualHeight > 10.0)
+		{
+			bounds = GetDisplayedVideoBounds(canvas, vm);
+		}
+		if (bounds.Width <= 10.0 || bounds.Height <= 10.0)
+		{
+			bounds = _lastActiveVideoBounds;
+		}
+		if (bounds.Width > 10.0 && bounds.Height > 10.0)
+		{
+			_lastActiveVideoBounds = bounds;
+			double relX = Math.Clamp((blur.X - bounds.Left) / bounds.Width, 0.0, 1.0);
+			double relY = Math.Clamp((blur.Y - bounds.Top) / bounds.Height, 0.0, 1.0);
+			double relW = Math.Clamp(blur.Width / bounds.Width, 0.005, 1.0 - relX);
+			double relH = Math.Clamp(blur.Height / bounds.Height, 0.005, 1.0 - relY);
+			_blurNormalizedCoords[blur] = (relX, relY, relW, relH);
+			if (!string.IsNullOrEmpty(blur.Id))
+			{
+				_blurNormalizedCoordsById[blur.Id] = (relX, relY, relW, relH);
+			}
+		}
+	}
+
 	private static void RefreshBlurVisuals(Canvas canvas, MainViewModel vm)
 	{
 		try
@@ -10532,6 +10744,7 @@ del ""%~f0""
 
 			foreach (BlurRegionItem blur in vm.BlurRegions)
 			{
+				UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 				if (!_blurRegionVisuals.TryGetValue(blur, out BlurRegionVisual visual))
 				{
 					visual = CreateBlurRegionVisual(canvas, vm, blur);
@@ -10739,6 +10952,7 @@ del ""%~f0""
 			blur.Y = Math.Clamp(startY + dy, bounds.Top, Math.Max(bounds.Top, bounds.Bottom - blur.Height));
 			Canvas.SetLeft(container, blur.X);
 			Canvas.SetTop(container, blur.Y);
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			e.Handled = true;
 		};
 
@@ -10747,6 +10961,7 @@ del ""%~f0""
 			if (!dragging) return;
 			dragging = false;
 			container.ReleaseMouseCapture();
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			try { vm.SaveProjectCommand?.Execute(null); } catch { }
 			e.Handled = true;
 		};
@@ -10777,6 +10992,7 @@ del ""%~f0""
 			blur.Height = newH;
 			container.Width = newW;
 			container.Height = newH;
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			e.Handled = true;
 		};
 
@@ -10786,6 +11002,7 @@ del ""%~f0""
 			resizingCorner = false;
 			resizing = false;
 			cornerHandle.ReleaseMouseCapture();
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			try { vm.SaveProjectCommand?.Execute(null); } catch { }
 			e.Handled = true;
 		};
@@ -10811,6 +11028,7 @@ del ""%~f0""
 			double newW = Math.Max(24.0, Math.Min(bounds.Right - blur.X, startW + (p.X - rightStart.X)));
 			blur.Width = newW;
 			container.Width = newW;
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			e.Handled = true;
 		};
 
@@ -10820,6 +11038,7 @@ del ""%~f0""
 			resizingRight = false;
 			resizing = false;
 			rightHandle.ReleaseMouseCapture();
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			try { vm.SaveProjectCommand?.Execute(null); } catch { }
 			e.Handled = true;
 		};
@@ -10845,6 +11064,7 @@ del ""%~f0""
 			double newH = Math.Max(16.0, Math.Min(bounds.Bottom - blur.Y, startH + (p.Y - bottomStart.Y)));
 			blur.Height = newH;
 			container.Height = newH;
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			e.Handled = true;
 		};
 
@@ -10854,6 +11074,7 @@ del ""%~f0""
 			resizingBottom = false;
 			resizing = false;
 			bottomHandle.ReleaseMouseCapture();
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			try { vm.SaveProjectCommand?.Execute(null); } catch { }
 			e.Handled = true;
 		};
@@ -10868,6 +11089,7 @@ del ""%~f0""
 			blur.Height = newH;
 			container.Width = newW;
 			container.Height = newH;
+			UpdateBlurNormalizedCoordinates(blur, canvas, vm);
 			e.Handled = true;
 		};
 
@@ -10880,25 +11102,33 @@ del ""%~f0""
 		double canvasHeight = Math.Max(1.0, canvas.ActualHeight);
 		double videoWidth = vm?.CurrentProject?.Width ?? 0.0;
 		double videoHeight = vm?.CurrentProject?.Height ?? 0.0;
-		if (videoWidth <= 0.0 || videoHeight <= 0.0)
+		Window win = Window.GetWindow(canvas) ?? Application.Current?.MainWindow;
+		MediaElement player = null;
+		if (win != null)
 		{
-			Window win = Window.GetWindow(canvas) ?? Application.Current?.MainWindow;
-			if (win != null)
+			player = FindVisualChild((DependencyObject)(object)win, (MediaElement m) => m.Name == "PreviewPlayer");
+			if (player != null && player.NaturalVideoWidth > 0 && player.NaturalVideoHeight > 0)
 			{
-				MediaElement player = FindVisualChild((DependencyObject)(object)win, (MediaElement m) => m.Name == "PreviewPlayer");
-				if (player != null && player.NaturalVideoWidth > 0 && player.NaturalVideoHeight > 0)
-				{
-					videoWidth = player.NaturalVideoWidth;
-					videoHeight = player.NaturalVideoHeight;
-				}
+				videoWidth = player.NaturalVideoWidth;
+				videoHeight = player.NaturalVideoHeight;
 			}
 		}
 		if (videoWidth <= 0.0 || videoHeight <= 0.0)
 			return new Rect(0.0, 0.0, canvasWidth, canvasHeight);
-		double scale = Math.Min(canvasWidth / videoWidth, canvasHeight / videoHeight);
+
+		bool isUniformToFill = (player != null && player.Stretch == Stretch.UniformToFill) || (_isFrameFillMode && vm?.SelectedSocialPreset?.AspectRatioText == "16:9");
+		double scale = isUniformToFill
+			? Math.Max(canvasWidth / videoWidth, canvasHeight / videoHeight)
+			: Math.Min(canvasWidth / videoWidth, canvasHeight / videoHeight);
+
 		double width = Math.Max(1.0, videoWidth * scale);
 		double height = Math.Max(1.0, videoHeight * scale);
-		return new Rect((canvasWidth - width) / 2.0, (canvasHeight - height) / 2.0, width, height);
+		Rect r = new Rect((canvasWidth - width) / 2.0, (canvasHeight - height) / 2.0, width, height);
+		if (r.Width > 10.0 && r.Height > 10.0)
+		{
+			_lastActiveVideoBounds = r;
+		}
+		return r;
 	}
 
 	private static MediaOverlayVisual CreateMediaOverlayVisual(Canvas canvas, MainViewModel vm, OverlayItem overlay)
