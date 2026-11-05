@@ -174,6 +174,11 @@ public static class Hook
 	private static readonly SemaphoreSlim _voiceSpeedPreviewLock = new SemaphoreSlim(1, 1);
 
 	private static readonly MediaPlayer _voiceSpeedPreviewPlayer = new MediaPlayer();
+	private static readonly MediaPlayer _previewLiveKhmerPlayer = new MediaPlayer();
+	private static readonly MediaPlayer _previewLiveBgmPlayer = new MediaPlayer();
+	private static int _previewLivePlayingLineIndex = -1;
+	private static DispatcherTimer _previewAudioSyncTimer = null;
+	private static bool _isPreviewAudioSyncHooked = false;
 
 	private static int _voiceSpeedPreviewVersion = 0;
 	private static bool _isExportLoadingHooked = false;
@@ -318,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.0.0";
+			window.Title = "SNA-Dubber Version 2.0.1";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -360,9 +365,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 2.0.0", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, "SNA-Dubber Version 2.0.1", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 2.0.0";
+				window.Title = "SNA-Dubber Version 2.0.1";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -473,6 +478,7 @@ public static class Hook
 				WireAutoUpdateCenterTool(window);
 			}
 			TryAttachExistingPreviewVideo(window);
+			WirePreviewAudioSync(window);
 			ApplyModernStudioRedesign(window);
 		}
 		catch
@@ -781,10 +787,74 @@ public static class Hook
 	public static async Task WaitForFfmpegExitDrainingAsync(Process process, CancellationToken cancellationToken)
 	{
 		if (process == null) return;
+		StringBuilder stderrBuf = new StringBuilder();
 		Task stdout = Task.Run(() => { try { process.StandardOutput.ReadToEnd(); } catch { } });
-		Task stderr = Task.Run(() => { try { process.StandardError.ReadToEnd(); } catch { } });
+		Task stderr = Task.Run(() => { 
+			try 
+			{ 
+				string err = process.StandardError.ReadToEnd(); 
+				if (!string.IsNullOrEmpty(err)) stderrBuf.Append(err);
+			} 
+			catch { } 
+		});
 		await process.WaitForExitAsync(cancellationToken);
 		await Task.WhenAll(stdout, stderr);
+
+		string args = process.StartInfo?.Arguments ?? "";
+		if (process.ExitCode != 0)
+		{
+			string errText = stderrBuf.ToString();
+			Log($"FFmpeg exited with code {process.ExitCode}. Stderr: {(errText.Length > 400 ? errText.Substring(errText.Length - 400) : errText)}");
+		}
+
+		if (args.Contains("snadub_audio_") && args.Contains(".wav"))
+		{
+			try
+			{
+				string outWav = null;
+				int lastQuote = args.LastIndexOf('"');
+				if (lastQuote > 0)
+				{
+					int prevQuote = args.LastIndexOf('"', lastQuote - 1);
+					if (prevQuote >= 0)
+					{
+						outWav = args.Substring(prevQuote + 1, lastQuote - prevQuote - 1);
+					}
+				}
+				if (!string.IsNullOrEmpty(outWav))
+				{
+					bool ok = File.Exists(outWav) && new FileInfo(outWav).Length > 1000;
+					if (!ok)
+					{
+						Log($"WaitForFfmpegExitDrainingAsync: snadub_audio output missing or invalid ({outWav}). Running emergency FFmpeg builder...");
+						string toolsFfmpeg = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", "ffmpeg.exe");
+						if (!File.Exists(toolsFfmpeg)) toolsFfmpeg = "ffmpeg";
+						ProcessStartInfo psi = new ProcessStartInfo
+						{
+							FileName = toolsFfmpeg,
+							Arguments = args,
+							UseShellExecute = false,
+							CreateNoWindow = true,
+							RedirectStandardError = true
+						};
+						using var p2 = Process.Start(psi);
+						if (p2 != null)
+						{
+							await p2.WaitForExitAsync(cancellationToken);
+							Log($"Emergency FFmpeg dub builder finished. Exists: {File.Exists(outWav)}, Size: {(File.Exists(outWav) ? new FileInfo(outWav).Length : 0)}");
+						}
+					}
+					else
+					{
+						Log($"BuildKhmerDubAudioAsync: {outWav} verified ({new FileInfo(outWav).Length} bytes).");
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Log("BuildKhmerDubAudioAsync fallback check error: " + ex.Message);
+			}
+		}
 	}
 
 	public static bool IsGeneratingOrExporting(MainViewModel vm)
@@ -1612,10 +1682,7 @@ public static class Hook
 		{
 			if (_originalVideoSourcePath != null && File.Exists(_originalVideoSourcePath))
 			{
-				if (vm.SelectedSocialPreset?.AspectRatioText != "16:9" || !_isFrameFillMode)
-				{
-					vm.CurrentProject.VideoPath = _originalVideoSourcePath;
-				}
+				vm.CurrentProject.VideoPath = _originalVideoSourcePath;
 			}
 
 			EnsureAllDialogueLinesApproved(vm);
@@ -1628,7 +1695,7 @@ public static class Hook
 
 				// UNMUTE AND BOOST KHMER TRANSLATED DUBBING
 				vm.AudioMix.IsKhmerMuted = false;
-				if (vm.AudioMix.KhmerDubVolume < 1.0) vm.AudioMix.KhmerDubVolume = 2.8;
+				vm.AudioMix.KhmerDubVolume = 3.0;
 
 				// ATTACH SEPARATED BGM TRACK IF AVAILABLE SO MUSIC REMAINS
 				string projId = vm.CurrentProject?.Id ?? "";
@@ -1876,35 +1943,7 @@ public static class Hook
 					if (blur == null || blur.EndMs <= blur.StartMs) continue;
 
 					// Compute normalized relative coordinates inside the UI video bounds
-					double relX = 0.0, relY = 0.0, relW = 0.0, relH = 0.0;
-					bool hasNorm = false;
-					if (_blurNormalizedCoords.TryGetValue(blur, out var normCoords))
-					{
-						relX = normCoords.relX;
-						relY = normCoords.relY;
-						relW = normCoords.relW;
-						relH = normCoords.relH;
-						hasNorm = true;
-					}
-					else if (!string.IsNullOrEmpty(blur.Id) && _blurNormalizedCoordsById.TryGetValue(blur.Id, out var idCoords))
-					{
-						relX = idCoords.relX;
-						relY = idCoords.relY;
-						relW = idCoords.relW;
-						relH = idCoords.relH;
-						hasNorm = true;
-					}
-
-					if (!hasNorm)
-					{
-						Rect refBounds = (videoBounds.Width > 10.0 && videoBounds.Height > 10.0)
-							? videoBounds
-							: (_lastActiveVideoBounds.Width > 10.0 ? _lastActiveVideoBounds : new Rect(0, 0, Math.Max(1.0, blur.X + blur.Width), Math.Max(1.0, blur.Y + blur.Height)));
-						relX = Math.Clamp((blur.X - refBounds.Left) / Math.Max(1.0, refBounds.Width), 0.0, 1.0);
-						relY = Math.Clamp((blur.Y - refBounds.Top) / Math.Max(1.0, refBounds.Height), 0.0, 1.0);
-						relW = Math.Clamp(blur.Width / Math.Max(1.0, refBounds.Width), 0.005, 1.0 - relX);
-						relH = Math.Clamp(blur.Height / Math.Max(1.0, refBounds.Height), 0.005, 1.0 - relY);
-					}
+					(double relX, double relY, double relW, double relH) = GetOrComputeBlurNormalizedCoords(blur, videoBounds);
 
 					// Desired pixel coordinates on FFmpeg [vscaled] canvas
 					double targetX = padX + (relX * scaledW);
@@ -2555,7 +2594,7 @@ public static class Hook
 
 			StackPanel curVerCol = new StackPanel();
 			curVerCol.Children.Add(new TextBlock { Text = "CURRENT VERSION", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)) });
-			TextBlock txtCurVer = new TextBlock { Text = "2.0.0", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
+			TextBlock txtCurVer = new TextBlock { Text = "2.0.1", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
 			curVerCol.Children.Add(txtCurVer);
 			infoGrid.Children.Add(curVerCol);
 
@@ -2733,7 +2772,7 @@ public static class Hook
 			dialog.Content = root;
 
 			// Logic & State
-			string currentVer = "2.0.0";
+			string currentVer = "2.0.1";
 			string latestVer = currentVer;
 			string downloadUrl = "";
 			string sha256Expected = "";
@@ -2765,32 +2804,57 @@ public static class Hook
 					string? sha256Found = null;
 					bool mandatoryFound = false;
 
-					// Query Supabase directly via PostgREST without relying on broken Cloudflare Worker
+					// 1. Primary: Query GitHub raw version.json directly
 					try
 					{
-						using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-						client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.0");
-						string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
-						using var resp = await client.GetAsync(apiUrl);
-						if (resp.IsSuccessStatusCode)
+						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.1");
+						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
+						using var ghResp = await ghClient.GetAsync(ghUrl);
+						if (ghResp.IsSuccessStatusCode)
 						{
-							string json = await resp.Content.ReadAsStringAsync();
-							using var doc = System.Text.Json.JsonDocument.Parse(json);
+							string ghJson = await ghResp.Content.ReadAsStringAsync();
+							using var doc = System.Text.Json.JsonDocument.Parse(ghJson);
 							var rootEl = doc.RootElement;
-							if (rootEl.TryGetProperty("data", out var dataEl))
-							{
-								if (dataEl.TryGetProperty("has_update", out var hu)) hasUpdate = hu.GetBoolean();
-								if (dataEl.TryGetProperty("latest_version", out var lv)) latestVersionFound = lv.GetString();
-								if (dataEl.TryGetProperty("download_url", out var du)) downloadUrlFound = du.GetString();
-								if (dataEl.TryGetProperty("release_notes", out var rn)) releaseNotesFound = rn.GetString();
-								if (dataEl.TryGetProperty("sha256", out var sha)) sha256Found = sha.GetString();
-								if (dataEl.TryGetProperty("mandatory", out var man)) mandatoryFound = man.GetBoolean();
-							}
+							if (rootEl.TryGetProperty("has_update", out var hu)) hasUpdate = hu.GetBoolean();
+							if (rootEl.TryGetProperty("latest_version", out var lv)) latestVersionFound = lv.GetString();
+							if (rootEl.TryGetProperty("download_url", out var du)) downloadUrlFound = du.GetString();
+							if (rootEl.TryGetProperty("release_notes", out var rn)) releaseNotesFound = rn.GetString();
+							if (rootEl.TryGetProperty("sha256", out var sha)) sha256Found = sha.GetString();
+							if (rootEl.TryGetProperty("mandatory", out var man)) mandatoryFound = man.GetBoolean();
 						}
 					}
 					catch { }
 
-					// Fallback to checking semantic version
+					// 2. Secondary fallback: Cloudflare worker API
+					if (string.IsNullOrEmpty(latestVersionFound))
+					{
+						try
+						{
+							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.1");
+							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
+							using var resp = await client.GetAsync(apiUrl);
+							if (resp.IsSuccessStatusCode)
+							{
+								string json = await resp.Content.ReadAsStringAsync();
+								using var doc = System.Text.Json.JsonDocument.Parse(json);
+								var rootEl = doc.RootElement;
+								if (rootEl.TryGetProperty("data", out var dataEl))
+								{
+									if (dataEl.TryGetProperty("has_update", out var hu)) hasUpdate = hu.GetBoolean();
+									if (dataEl.TryGetProperty("latest_version", out var lv)) latestVersionFound = lv.GetString();
+									if (dataEl.TryGetProperty("download_url", out var du)) downloadUrlFound = du.GetString();
+									if (dataEl.TryGetProperty("release_notes", out var rn)) releaseNotesFound = rn.GetString();
+									if (dataEl.TryGetProperty("sha256", out var sha)) sha256Found = sha.GetString();
+									if (dataEl.TryGetProperty("mandatory", out var man)) mandatoryFound = man.GetBoolean();
+								}
+							}
+						}
+						catch { }
+					}
+
+					// Semantic version comparison
 					if (!string.IsNullOrEmpty(latestVersionFound) && Version.TryParse(latestVersionFound, out Version? remoteVer) && Version.TryParse(currentVer, out Version? localVer))
 					{
 						if (remoteVer > localVer)
@@ -2821,9 +2885,9 @@ public static class Hook
 					{
 						setBadge("Up to Date", "#059669");
 						txtStatus.Text = "No updates available.";
-						txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.0).\nAll latest features and enhancements are active.";
+						txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.1).\nAll latest features and enhancements are active.";
 						progressCard.Visibility = Visibility.Collapsed;
-						MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.0).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+						MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.1).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 					}
 				}
 				catch (Exception)
@@ -4046,6 +4110,8 @@ del ""%~f0""
 										if (flag)
 										{
 											mediaElement.Source = new Uri(latest);
+											mediaElement.IsMuted = false;
+											mediaElement.Volume = 1.0;
 											Log("Auto-attached existing preview video asynchronously: " + latest);
 											if (_btnPreviewRef != null)
 											{
@@ -4071,6 +4137,156 @@ del ""%~f0""
 		}
 		catch
 		{
+		}
+	}
+
+	public static void WirePreviewAudioSync(Window window)
+	{
+		try
+		{
+			if (_isPreviewAudioSyncHooked) return;
+			if (window.DataContext is not MainViewModel vm) return;
+			MediaElement player = FindVisualChild((DependencyObject)(object)window, (MediaElement me) => me.Name == "PreviewPlayer");
+			if (player == null) return;
+
+			Slider slider = FindVisualChild((DependencyObject)(object)window, (Slider s) => s.Name == "TimelineSlider");
+			if (slider != null)
+			{
+				slider.ValueChanged += (s, e) =>
+				{
+					_previewLivePlayingLineIndex = -1;
+					try { _previewLiveKhmerPlayer.Stop(); } catch { }
+					if (_previewLiveBgmPlayer.Source != null)
+					{
+						try { _previewLiveBgmPlayer.Position = TimeSpan.FromSeconds(e.NewValue); } catch { }
+					}
+				};
+			}
+
+			_previewAudioSyncTimer = new DispatcherTimer(DispatcherPriority.Render, window.Dispatcher)
+			{
+				Interval = TimeSpan.FromMilliseconds(25)
+			};
+			_previewAudioSyncTimer.Tick += (s, e) =>
+			{
+				try
+				{
+					if (vm.CurrentProject == null || string.IsNullOrEmpty(vm.CurrentProject.VideoPath))
+					{
+						_previewLiveKhmerPlayer.Stop();
+						_previewLiveBgmPlayer.Stop();
+						_previewLivePlayingLineIndex = -1;
+						return;
+					}
+
+					bool isPreRendered = player.Source != null && player.Source.LocalPath.Contains("PreviewCache");
+					if (isPreRendered)
+					{
+						if (player.IsMuted) player.IsMuted = false;
+						_previewLiveKhmerPlayer.Stop();
+						_previewLiveBgmPlayer.Stop();
+						_previewLivePlayingLineIndex = -1;
+						return;
+					}
+
+					// Raw original video: MUTE CHINESE AUDIO COMPLETELY
+					if (!player.IsMuted)
+					{
+						player.IsMuted = true;
+						player.Volume = 0.0;
+					}
+
+					if (!vm.IsPlaying)
+					{
+						if (_previewLiveKhmerPlayer.Position > TimeSpan.Zero)
+						{
+							_previewLiveKhmerPlayer.Pause();
+						}
+						if (_previewLiveBgmPlayer.Position > TimeSpan.Zero)
+						{
+							_previewLiveBgmPlayer.Pause();
+						}
+						return;
+					}
+
+					int curMs = (int)player.Position.TotalMilliseconds;
+
+					// 1. Dialogue Line Audio Playback
+					DialogueLine activeLine = null;
+					if (vm.DialogueLines != null)
+					{
+						foreach (DialogueLine line in vm.DialogueLines)
+						{
+							if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath)
+								&& curMs >= line.StartMs && curMs < line.EndMs)
+							{
+								activeLine = line;
+								break;
+							}
+						}
+					}
+
+					if (activeLine != null)
+					{
+						if (_previewLivePlayingLineIndex != activeLine.Index)
+						{
+							_previewLivePlayingLineIndex = activeLine.Index;
+							_previewLiveKhmerPlayer.Stop();
+							_previewLiveKhmerPlayer.Open(new Uri(Path.GetFullPath(activeLine.AudioFilePath)));
+							int offsetMs = Math.Max(0, curMs - activeLine.StartMs);
+							_previewLiveKhmerPlayer.Position = TimeSpan.FromMilliseconds(offsetMs);
+							_previewLiveKhmerPlayer.Volume = 1.0;
+							_previewLiveKhmerPlayer.Play();
+						}
+						else
+						{
+							_previewLiveKhmerPlayer.Play();
+						}
+					}
+					else
+					{
+						if (_previewLivePlayingLineIndex != -1)
+						{
+							_previewLivePlayingLineIndex = -1;
+							try { _previewLiveKhmerPlayer.Stop(); } catch { }
+						}
+					}
+
+					// 2. Background Music Playback
+					string projId = vm.CurrentProject.Id ?? "";
+					string bgmPath = vm.AudioMix?.BgmTrackPath;
+					if (string.IsNullOrEmpty(bgmPath) || !File.Exists(bgmPath))
+					{
+						bgmPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "SeparatedAudio", projId, "bgm_track.wav");
+					}
+					if (File.Exists(bgmPath) && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
+					{
+						if (_previewLiveBgmPlayer.Source == null || !_previewLiveBgmPlayer.Source.LocalPath.Equals(Path.GetFullPath(bgmPath), StringComparison.OrdinalIgnoreCase))
+						{
+							_previewLiveBgmPlayer.Open(new Uri(Path.GetFullPath(bgmPath)));
+						}
+						double diff = Math.Abs((_previewLiveBgmPlayer.Position - player.Position).TotalMilliseconds);
+						if (diff > 150.0)
+						{
+							_previewLiveBgmPlayer.Position = player.Position;
+						}
+						_previewLiveBgmPlayer.Volume = 0.28;
+						_previewLiveBgmPlayer.Play();
+					}
+					else
+					{
+						_previewLiveBgmPlayer.Stop();
+					}
+				}
+				catch { }
+			};
+			_previewAudioSyncTimer.Start();
+			_isPreviewAudioSyncHooked = true;
+			Log("WirePreviewAudioSync: Real-time Khmer dialogue and BGM synchronization hooked to preview transport!");
+		}
+		catch (Exception ex)
+		{
+			Log("WirePreviewAudioSync error: " + ex.Message);
 		}
 	}
 
@@ -6227,9 +6443,10 @@ del ""%~f0""
 				double right = item.EndMs / totalMs * track.ActualWidth;
 				bool selected = _selectedTimelineBlurRegions.Contains(item) || ReferenceEquals(vm.SelectedBlurRegion, item);
 				Grid content = new Grid { IsHitTestVisible = false };
-				content.Children.Add(new TextBlock { Text = $"BLUR  {item.Label}", Foreground = Brushes.White, FontSize = 9.0, Margin = new Thickness(7, 2, 7, 0), TextTrimming = TextTrimming.CharacterEllipsis });
+				string blurTitle = (item.Label ?? "").Split('|')[0];
+				content.Children.Add(new TextBlock { Text = $"BLUR  {blurTitle}", Foreground = Brushes.White, FontSize = 9.0, Margin = new Thickness(7, 2, 7, 0), TextTrimming = TextTrimming.CharacterEllipsis });
 				if (selected) { content.Children.Add(new Border { Width = 5, Background = Brushes.White, HorizontalAlignment = HorizontalAlignment.Left }); content.Children.Add(new Border { Width = 5, Background = Brushes.White, HorizontalAlignment = HorizontalAlignment.Right }); }
-				Border clip = new Border { Height = 22, Width = Math.Max(12.0, Math.Min(Math.Max(12.0, track.ActualWidth - left), right - left)), Background = new SolidColorBrush(Color.FromRgb(8, 145, 178)), BorderBrush = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(34, 211, 238)), BorderThickness = selected ? new Thickness(2) : new Thickness(1), CornerRadius = new CornerRadius(2), Child = content, ToolTip = $"{item.Label}\nDrag middle to move • Drag edges to trim" };
+				Border clip = new Border { Height = 22, Width = Math.Max(12.0, Math.Min(Math.Max(12.0, track.ActualWidth - left), right - left)), Background = new SolidColorBrush(Color.FromRgb(8, 145, 178)), BorderBrush = selected ? Brushes.White : new SolidColorBrush(Color.FromRgb(34, 211, 238)), BorderThickness = selected ? new Thickness(2) : new Thickness(1), CornerRadius = new CornerRadius(2), Child = content, ToolTip = $"{blurTitle}\nDrag middle to move • Drag edges to trim" };
 				ToolTipService.SetInitialShowDelay(clip, 900);
 				ToolTipService.SetShowDuration(clip, 5000);
 				Canvas.SetLeft(clip, Math.Max(0, left)); Canvas.SetTop(clip, (layers.Count + i) * 26.0 + 2.0);
@@ -10754,6 +10971,51 @@ del ""%~f0""
 		}
 	}
 
+	private static (double relX, double relY, double relW, double relH) GetOrComputeBlurNormalizedCoords(BlurRegionItem blur, Rect bounds)
+	{
+		if (blur == null) return (0.1, 0.7, 0.8, 0.12);
+		if (_blurNormalizedCoords.TryGetValue(blur, out var norm)) return norm;
+		if (!string.IsNullOrEmpty(blur.Id) && _blurNormalizedCoordsById.TryGetValue(blur.Id, out var idNorm)) return idNorm;
+
+		if (!string.IsNullOrEmpty(blur.Label) && blur.Label.Contains('|'))
+		{
+			try
+			{
+				string[] parts = blur.Label.Split('|');
+				if (parts.Length > 1)
+				{
+					string[] coords = parts[1].Split(',');
+					if (coords.Length == 4)
+					{
+						double nx = double.Parse(coords[0], CultureInfo.InvariantCulture);
+						double ny = double.Parse(coords[1], CultureInfo.InvariantCulture);
+						double nw = double.Parse(coords[2], CultureInfo.InvariantCulture);
+						double nh = double.Parse(coords[3], CultureInfo.InvariantCulture);
+						var res = (Math.Clamp(nx, 0.0, 1.0), Math.Clamp(ny, 0.0, 1.0), Math.Clamp(nw, 0.005, 1.0), Math.Clamp(nh, 0.005, 1.0));
+						_blurNormalizedCoords[blur] = res;
+						if (!string.IsNullOrEmpty(blur.Id)) _blurNormalizedCoordsById[blur.Id] = res;
+						return res;
+					}
+				}
+			}
+			catch { }
+		}
+
+		if (bounds.Width > 10.0 && bounds.Height > 10.0)
+		{
+			double rx = Math.Clamp((blur.X - bounds.Left) / bounds.Width, 0.0, 1.0);
+			double ry = Math.Clamp((blur.Y - bounds.Top) / bounds.Height, 0.0, 1.0);
+			double rw = Math.Clamp(blur.Width / bounds.Width, 0.005, 1.0 - rx);
+			double rh = Math.Clamp(blur.Height / bounds.Height, 0.005, 1.0 - ry);
+			var res = (rx, ry, rw, rh);
+			_blurNormalizedCoords[blur] = res;
+			if (!string.IsNullOrEmpty(blur.Id)) _blurNormalizedCoordsById[blur.Id] = res;
+			return res;
+		}
+
+		return (0.1, 0.7, 0.8, 0.12);
+	}
+
 	private static void UpdateBlurNormalizedCoordinates(BlurRegionItem blur, Canvas canvas, MainViewModel vm)
 	{
 		if (blur == null) return;
@@ -10778,6 +11040,8 @@ del ""%~f0""
 			{
 				_blurNormalizedCoordsById[blur.Id] = (relX, relY, relW, relH);
 			}
+			string prefix = blur.Label != null && blur.Label.Contains('|') ? blur.Label.Split('|')[0] : (blur.Label ?? "Blur");
+			blur.Label = $"{prefix}|{relX.ToString("F4", CultureInfo.InvariantCulture)},{relY.ToString("F4", CultureInfo.InvariantCulture)},{relW.ToString("F4", CultureInfo.InvariantCulture)},{relH.ToString("F4", CultureInfo.InvariantCulture)}";
 		}
 	}
 
@@ -10788,17 +11052,24 @@ del ""%~f0""
 			if (vm.BlurRegions == null) return;
 
 			// Ensure built-in ItemsControl with [BLUR ORIGINAL CHINESE TITLE] remains collapsed
-			foreach (ItemsControl items in FindAllVisualChildren<ItemsControl>((DependencyObject)(object)canvas))
+			Window win = Window.GetWindow(canvas) ?? Application.Current?.MainWindow;
+			if (win != null)
 			{
-				Binding binding = BindingOperations.GetBinding((DependencyObject)(object)items, ItemsControl.ItemsSourceProperty);
-				if (string.Equals(binding?.Path?.Path, "BlurRegions", StringComparison.Ordinal)
-					|| string.Equals(binding?.Path?.Path, "Overlays", StringComparison.Ordinal)
-					|| (vm.BlurRegions != null && ReferenceEquals(items.ItemsSource, vm.BlurRegions))
-					|| (vm.Overlays != null && ReferenceEquals(items.ItemsSource, vm.Overlays)))
+				foreach (ItemsControl items in FindAllVisualChildren<ItemsControl>((DependencyObject)(object)win))
 				{
-					items.Visibility = Visibility.Collapsed;
+					Binding binding = BindingOperations.GetBinding((DependencyObject)(object)items, ItemsControl.ItemsSourceProperty);
+					if (string.Equals(binding?.Path?.Path, "BlurRegions", StringComparison.Ordinal)
+						|| string.Equals(binding?.Path?.Path, "Overlays", StringComparison.Ordinal)
+						|| (vm.BlurRegions != null && ReferenceEquals(items.ItemsSource, vm.BlurRegions))
+						|| (vm.Overlays != null && ReferenceEquals(items.ItemsSource, vm.Overlays)))
+					{
+						items.Visibility = Visibility.Collapsed;
+						items.ItemsSource = null;
+					}
 				}
 			}
+
+			Rect videoBounds = GetDisplayedVideoBounds(canvas, vm);
 
 			foreach (BlurRegionItem stale in _blurRegionVisuals.Keys.Where(item => !vm.BlurRegions.Contains(item)).ToList())
 			{
@@ -10809,7 +11080,8 @@ del ""%~f0""
 
 			foreach (BlurRegionItem blur in vm.BlurRegions)
 			{
-				UpdateBlurNormalizedCoordinates(blur, canvas, vm);
+				(double relX, double relY, double relW, double relH) = GetOrComputeBlurNormalizedCoords(blur, videoBounds);
+
 				if (!_blurRegionVisuals.TryGetValue(blur, out BlurRegionVisual visual))
 				{
 					visual = CreateBlurRegionVisual(canvas, vm, blur);
@@ -10822,11 +11094,35 @@ del ""%~f0""
 				bool inRange = posMs >= blur.StartMs && posMs <= Math.Max(blur.StartMs + 1, blur.EndMs);
 
 				visual.Container.Visibility = (inRange || selected) ? Visibility.Visible : Visibility.Collapsed;
-				visual.Container.Width = Math.Max(24.0, blur.Width);
-				visual.Container.Height = Math.Max(16.0, blur.Height);
+
+				// Keep blur accurately aligned to video bounds
+				if (videoBounds.Width > 10.0 && videoBounds.Height > 10.0)
+				{
+					double targetX = videoBounds.Left + relX * videoBounds.Width;
+					double targetY = videoBounds.Top + relY * videoBounds.Height;
+					double targetW = Math.Max(24.0, relW * videoBounds.Width);
+					double targetH = Math.Max(16.0, relH * videoBounds.Height);
+
+					blur.X = targetX;
+					blur.Y = targetY;
+					blur.Width = targetW;
+					blur.Height = targetH;
+
+					visual.Container.Width = targetW;
+					visual.Container.Height = targetH;
+					Canvas.SetLeft(visual.Container, targetX);
+					Canvas.SetTop(visual.Container, targetY);
+				}
+				else
+				{
+					visual.Container.Width = Math.Max(24.0, blur.Width);
+					visual.Container.Height = Math.Max(16.0, blur.Height);
+					Canvas.SetLeft(visual.Container, Math.Max(0.0, blur.X));
+					Canvas.SetTop(visual.Container, Math.Max(0.0, blur.Y));
+				}
 
 				double opacity = _blurRegionOpacity.TryGetValue(blur, out double op) ? op : Math.Clamp(blur.Strength / 30.0, 0.1, 1.0);
-				visual.Box.Fill = new SolidColorBrush(Color.FromArgb((byte)(opacity * 230.0), 100, 116, 139));
+				visual.Box.Fill = new SolidColorBrush(Color.FromArgb((byte)(opacity * 235.0), 30, 41, 59));
 				visual.Box.Stroke = Brushes.Transparent;
 				visual.Box.StrokeThickness = 0.0;
 				visual.Box.StrokeDashArray = null;
@@ -10839,8 +11135,6 @@ del ""%~f0""
 				if (visual.Label != null) visual.Label.Visibility = Visibility.Collapsed;
 				visual.Container.Cursor = selected ? Cursors.SizeAll : Cursors.Hand;
 
-				Canvas.SetLeft(visual.Container, Math.Max(0.0, blur.X));
-				Canvas.SetTop(visual.Container, Math.Max(0.0, blur.Y));
 				Panel.SetZIndex(visual.Container, selected ? 960 : 750);
 			}
 		}
