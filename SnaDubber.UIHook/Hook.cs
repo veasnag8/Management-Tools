@@ -1520,13 +1520,48 @@ public static class Hook
 
 		foreach (DialogueLine line in vm.DialogueLines)
 		{
-			if ((string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath) || new FileInfo(line.AudioFilePath).Length < 100) && !string.IsNullOrEmpty(cacheDir))
+			if (string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath) || new FileInfo(line.AudioFilePath).Length < 100)
 			{
-				string cand1 = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
-				string cand2 = Path.Combine(cacheDir, $"line_{line.Index}.wav");
-				if (File.Exists(cand1) && new FileInfo(cand1).Length > 100) line.AudioFilePath = cand1;
-				else if (File.Exists(cand2) && new FileInfo(cand2).Length > 100) line.AudioFilePath = cand2;
+				if (!string.IsNullOrEmpty(cacheDir))
+				{
+					string cand1 = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
+					string cand2 = Path.Combine(cacheDir, $"line_{line.Index}.wav");
+					if (File.Exists(cand1) && new FileInfo(cand1).Length > 100) line.AudioFilePath = cand1;
+					else if (File.Exists(cand2) && new FileInfo(cand2).Length > 100) line.AudioFilePath = cand2;
+				}
+
+				// If not found in current project's cache, search across other project caches in AudioCache
+				if (string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath))
+				{
+					try
+					{
+						string baseAudioCache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "AudioCache");
+						if (Directory.Exists(baseAudioCache))
+						{
+							foreach (string otherProjDir in Directory.GetDirectories(baseAudioCache))
+							{
+								string otherCand = Path.Combine(otherProjDir, $"line_{line.Index}.mp3");
+								if (File.Exists(otherCand) && new FileInfo(otherCand).Length > 100)
+								{
+									if (!string.IsNullOrEmpty(cacheDir))
+									{
+										string localCopy = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
+										File.Copy(otherCand, localCopy, true);
+										line.AudioFilePath = localCopy;
+									}
+									else
+									{
+										line.AudioFilePath = otherCand;
+									}
+									break;
+								}
+							}
+						}
+					}
+					catch { }
+				}
 			}
+
 			if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath) && new FileInfo(line.AudioFilePath).Length > 100)
 			{
 				line.IsApproved = true;
@@ -2077,16 +2112,9 @@ public static class Hook
 		await Task.Run(() =>
 		{
 			CleanupTemporaryExportArtifacts();
-			string id = vm?.CurrentProject?.Id;
-			if (string.IsNullOrWhiteSpace(id) || id.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return;
-			string root = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber"));
-			foreach (string cacheName in new[] { "AudioCache", "PreviewCache", "SeparatedAudio" })
-			{
-				string target = Path.GetFullPath(Path.Combine(root, cacheName, id));
-				if (!target.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) continue;
-				try { if (Directory.Exists(target)) Directory.Delete(target, true); }
-				catch (Exception ex) { Log($"Cleanup skipped {target}: {ex.Message}"); }
-			}
+			// NOTE: Do NOT delete AudioCache or SeparatedAudio!
+			// Those directories contain the project's generated Khmer dubbing and BGM audio files.
+			// Deleting them breaks audio playback and results in exported videos playing without Khmer voice!
 			try
 			{
 				foreach (string file in Directory.EnumerateFiles(Path.GetTempPath(), "snadub_audio_*", SearchOption.TopDirectoryOnly))
@@ -9391,12 +9419,19 @@ del ""%~f0""
 			if (overlayCanvas == null)
 				return;
 
-			// Replace the original image-only presenter. Our layer supports images, animated GIFs and mini videos.
+			// Replace the original built-in presenters (Overlays & BlurRegions).
+			// The original BlurRegions presenter in MainWindow.xaml renders an ugly cyan border with hardcoded text [BLUR ORIGINAL CHINESE TITLE].
+			// We collapse it completely so only our clean, borderless blur visual appears!
 			foreach (ItemsControl items in FindAllVisualChildren<ItemsControl>((DependencyObject)(object)overlayCanvas))
 			{
 				Binding binding = BindingOperations.GetBinding((DependencyObject)(object)items, ItemsControl.ItemsSourceProperty);
-				if (string.Equals(binding?.Path?.Path, "Overlays", StringComparison.Ordinal))
+				if (string.Equals(binding?.Path?.Path, "Overlays", StringComparison.Ordinal)
+					|| string.Equals(binding?.Path?.Path, "BlurRegions", StringComparison.Ordinal)
+					|| (vm.BlurRegions != null && ReferenceEquals(items.ItemsSource, vm.BlurRegions))
+					|| (vm.Overlays != null && ReferenceEquals(items.ItemsSource, vm.Overlays)))
+				{
 					items.Visibility = Visibility.Collapsed;
+				}
 			}
 
 			_mediaOverlayRefreshTimer?.Stop();
@@ -10752,6 +10787,19 @@ del ""%~f0""
 		{
 			if (vm.BlurRegions == null) return;
 
+			// Ensure built-in ItemsControl with [BLUR ORIGINAL CHINESE TITLE] remains collapsed
+			foreach (ItemsControl items in FindAllVisualChildren<ItemsControl>((DependencyObject)(object)canvas))
+			{
+				Binding binding = BindingOperations.GetBinding((DependencyObject)(object)items, ItemsControl.ItemsSourceProperty);
+				if (string.Equals(binding?.Path?.Path, "BlurRegions", StringComparison.Ordinal)
+					|| string.Equals(binding?.Path?.Path, "Overlays", StringComparison.Ordinal)
+					|| (vm.BlurRegions != null && ReferenceEquals(items.ItemsSource, vm.BlurRegions))
+					|| (vm.Overlays != null && ReferenceEquals(items.ItemsSource, vm.Overlays)))
+				{
+					items.Visibility = Visibility.Collapsed;
+				}
+			}
+
 			foreach (BlurRegionItem stale in _blurRegionVisuals.Keys.Where(item => !vm.BlurRegions.Contains(item)).ToList())
 			{
 				BlurRegionVisual old = _blurRegionVisuals[stale];
@@ -10778,17 +10826,17 @@ del ""%~f0""
 				visual.Container.Height = Math.Max(16.0, blur.Height);
 
 				double opacity = _blurRegionOpacity.TryGetValue(blur, out double op) ? op : Math.Clamp(blur.Strength / 30.0, 0.1, 1.0);
-				visual.Box.Fill = new SolidColorBrush(Color.FromArgb((byte)(opacity * 235.0), 128, 128, 128));
-				visual.Box.Stroke = selected ? new SolidColorBrush(Color.FromRgb(56, 189, 248)) : Brushes.Transparent;
-				visual.Box.StrokeThickness = selected ? 2.0 : 0.0;
-				visual.Box.StrokeDashArray = selected ? new DoubleCollection { 4, 3 } : null;
+				visual.Box.Fill = new SolidColorBrush(Color.FromArgb((byte)(opacity * 230.0), 100, 116, 139));
+				visual.Box.Stroke = Brushes.Transparent;
+				visual.Box.StrokeThickness = 0.0;
+				visual.Box.StrokeDashArray = null;
 
 				visual.CornerHandle.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
 				visual.RightHandle.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
 				visual.BottomHandle.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
 				visual.DeleteButton.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
-				if (visual.HeaderPill != null) visual.HeaderPill.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
-				visual.Label.Text = $"🌫 Blur ({opacity:P0})";
+				if (visual.HeaderPill != null) visual.HeaderPill.Visibility = Visibility.Collapsed;
+				if (visual.Label != null) visual.Label.Visibility = Visibility.Collapsed;
 				visual.Container.Cursor = selected ? Cursors.SizeAll : Cursors.Hand;
 
 				Canvas.SetLeft(visual.Container, Math.Max(0.0, blur.X));
@@ -10811,10 +10859,10 @@ del ""%~f0""
 
 		Rectangle box = new Rectangle
 		{
-			Fill = new SolidColorBrush(Color.FromArgb((byte)(opVal * 235.0), 128, 128, 128)),
-			Stroke = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
-			StrokeThickness = 2.0,
-			StrokeDashArray = new DoubleCollection { 4, 3 },
+			Fill = new SolidColorBrush(Color.FromArgb((byte)(opVal * 230.0), 100, 116, 139)),
+			Stroke = Brushes.Transparent,
+			StrokeThickness = 0.0,
+			StrokeDashArray = null,
 			RadiusX = 4, RadiusY = 4,
 			IsHitTestVisible = true
 		};
@@ -10823,20 +10871,12 @@ del ""%~f0""
 
 		Border headerPill = new Border
 		{
-			HorizontalAlignment = HorizontalAlignment.Left,
-			VerticalAlignment = VerticalAlignment.Top,
-			Background = new SolidColorBrush(Color.FromArgb(200, 30, 41, 59)),
-			CornerRadius = new CornerRadius(3),
-			Padding = new Thickness(4, 1, 4, 1),
-			Margin = new Thickness(4, 3, 0, 0),
+			Visibility = Visibility.Collapsed,
 			IsHitTestVisible = false
 		};
 		TextBlock label = new TextBlock
 		{
-			Text = $"🌫 Blur ({opVal:P0})",
-			Foreground = new SolidColorBrush(Color.FromRgb(125, 211, 252)),
-			FontSize = 10.0,
-			FontWeight = FontWeights.Bold
+			Visibility = Visibility.Collapsed
 		};
 		state.Label = label;
 		state.HeaderPill = headerPill;
