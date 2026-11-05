@@ -638,9 +638,16 @@ public static class Hook
 			}
 			else if (e.PropertyName == "IsExporting" || e.PropertyName == "IsBusy")
 			{
-				if (e.PropertyName == "IsExporting" && vm.IsExporting)
+				if (e.PropertyName == "IsExporting")
 				{
-					PreExportSync(vm, window);
+					if (vm.IsExporting)
+					{
+						PreExportSync(vm, window);
+					}
+					else
+					{
+						RemoveTemporaryExportOverlays(vm);
+					}
 				}
 
 				// If admin revoked while generating/exporting, wait until current task completes, then lock immediately!
@@ -1692,7 +1699,10 @@ public static class Hook
 				else if (wasRunning)
 				{
 					wasRunning = false;
-					RemoveTemporaryExportOverlays(vm);
+					if (!vm.IsExporting)
+					{
+						RemoveTemporaryExportOverlays(vm);
+					}
 					if (_originalVideoSourcePath != null && vm.CurrentProject != null)
 					{
 						if (_isVideoFlipped && _cachedFlippedVideoPath != null)
@@ -1736,17 +1746,24 @@ public static class Hook
 	{
 		try
 		{
+			if (vm.IsExporting && _temporaryExportOverlays.Count > 0)
+			{
+				Log("InjectTextLayersForExport: Overlays already active for current export.");
+				return;
+			}
 			RemoveTemporaryExportOverlays(vm);
 
 			// 1. Ensure all dialogue lines with synthesized audio are marked IsApproved = true
 			// so FFmpeg BuildKhmerDubAudioAsync includes them in the exported audio track!
 			EnsureAllDialogueLinesApproved(vm);
 
-			// 2. Ensure Khmer dub volume is properly boosted and unmuted
+			// 2. Ensure Khmer dub volume is properly boosted and original Chinese audio is fully muted
 			if (vm.AudioMix != null)
 			{
-				if (vm.AudioMix.KhmerDubVolume < 1.0) vm.AudioMix.KhmerDubVolume = 2.5;
+				vm.AudioMix.IsOriginalMuted = true;
+				vm.AudioMix.OriginalAudioVolume = 0.0;
 				vm.AudioMix.IsKhmerMuted = false;
+				vm.AudioMix.KhmerDubVolume = 3.0;
 			}
 
 			// 3. Obtain displayed video bounds on the UI preview canvas
