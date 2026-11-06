@@ -5,18 +5,18 @@
     <UseWPF>true</UseWPF>
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>2.0.1</Version>
-    <AssemblyVersion>2.0.1.0</AssemblyVersion>
-    <FileVersion>2.0.1.0</FileVersion>
+    <Version>2.0.2</Version>
+    <AssemblyVersion>2.0.2.0</AssemblyVersion>
+    <FileVersion>2.0.2.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="SnaDubber">
-      <HintPath>..\SnaDubber.dll.original</HintPath>
+      <HintPath>..\..\SNA-Dubber\SnaDubber.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="CommunityToolkit.Mvvm">
-      <HintPath>..\CommunityToolkit.Mvvm.dll</HintPath>
+      <HintPath>..\..\SNA-Dubber\CommunityToolkit.Mvvm.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

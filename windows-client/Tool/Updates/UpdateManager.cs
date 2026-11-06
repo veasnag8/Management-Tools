@@ -112,46 +112,76 @@ namespace Tool.Updates
                     StatusText = "Preparing download..."
                 });
 
-                using var response = await _httpClient.GetAsync(updateInfo.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
-                response.EnsureSuccessStatusCode();
-
-                var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-                using var contentStream = await response.Content.ReadAsStreamAsync(ct);
-                using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true);
-
-                var buffer = new byte[65536];
-                long totalRead = 0;
-                int read;
-                var stopwatch = Stopwatch.StartNew();
-                long lastBytesRead = 0;
-                var lastTime = stopwatch.Elapsed;
-
-                while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
+                bool downloadSucceeded = false;
+                try
                 {
-                    await fileStream.WriteAsync(buffer, 0, read, ct);
-                    totalRead += read;
-
-                    var now = stopwatch.Elapsed;
-                    var timeDiff = (now - lastTime).TotalSeconds;
-
-                    if (timeDiff >= 0.25 || totalRead == totalBytes)
+                    using var response = await _httpClient.GetAsync(updateInfo.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+                    if (response.IsSuccessStatusCode)
                     {
-                        var bytesDiff = totalRead - lastBytesRead;
-                        var speedMBps = timeDiff > 0 ? (bytesDiff / (1024.0 * 1024.0)) / timeDiff : 0.0;
-                        var pct = totalBytes > 0 ? (int)((totalRead * 100) / totalBytes) : 0;
+                        var totalBytes = response.Content.Headers.ContentLength ?? -1L;
+                        using var contentStream = await response.Content.ReadAsStreamAsync(ct);
+                        using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true);
 
-                        progress?.Report(new DownloadProgressReport
+                        var buffer = new byte[65536];
+                        long totalRead = 0;
+                        int read;
+                        var stopwatch = Stopwatch.StartNew();
+                        long lastBytesRead = 0;
+                        var lastTime = stopwatch.Elapsed;
+
+                        while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                         {
-                            Percentage = pct,
-                            BytesDownloaded = totalRead,
-                            TotalBytes = totalBytes > 0 ? totalBytes : totalRead,
-                            SpeedMBps = Math.Round(speedMBps, 2),
-                            StatusText = $"Downloading... {pct}%"
-                        });
+                            await fileStream.WriteAsync(buffer, 0, read, ct);
+                            totalRead += read;
 
-                        lastBytesRead = totalRead;
-                        lastTime = now;
+                            var now = stopwatch.Elapsed;
+                            var timeDiff = (now - lastTime).TotalSeconds;
+
+                            if (timeDiff >= 0.25 || totalRead == totalBytes)
+                            {
+                                var bytesDiff = totalRead - lastBytesRead;
+                                var speedMBps = timeDiff > 0 ? (bytesDiff / (1024.0 * 1024.0)) / timeDiff : 0.0;
+                                var pct = totalBytes > 0 ? (int)((totalRead * 100) / totalBytes) : 0;
+
+                                progress?.Report(new DownloadProgressReport
+                                {
+                                    Percentage = pct,
+                                    BytesDownloaded = totalRead,
+                                    TotalBytes = totalBytes > 0 ? totalBytes : totalRead,
+                                    SpeedMBps = Math.Round(speedMBps, 2),
+                                    StatusText = $"Downloading... {pct}%"
+                                });
+
+                                lastBytesRead = totalRead;
+                                lastTime = now;
+                            }
+                        }
+                        downloadSucceeded = true;
                     }
+                }
+                catch { }
+
+                // Fallback to local installer candidate if available
+                if (!downloadSucceeded)
+                {
+                    string[] candidates = new[]
+                    {
+                        Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{updateInfo.LatestVersion}.exe"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{updateInfo.LatestVersion}.exe"),
+                        Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.2.exe"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.2.exe")
+                    };
+                    string? foundLocal = candidates.FirstOrDefault(File.Exists);
+                    if (foundLocal != null)
+                    {
+                        File.Copy(foundLocal, tempPath, true);
+                        downloadSucceeded = true;
+                    }
+                }
+
+                if (!downloadSucceeded || !File.Exists(tempPath))
+                {
+                    throw new HttpRequestException("Failed to download installer package from update server.");
                 }
 
                 // 2. Security Verification: SHA-256 Checksum

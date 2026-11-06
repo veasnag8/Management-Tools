@@ -1697,18 +1697,18 @@ public static class Hook
 				vm.AudioMix.IsKhmerMuted = false;
 				vm.AudioMix.KhmerDubVolume = 3.0;
 
-				// ATTACH SEPARATED BGM TRACK IF AVAILABLE SO MUSIC REMAINS
-				string projId = vm.CurrentProject?.Id ?? "";
-				if (!string.IsNullOrEmpty(projId))
+				// DO NOT LEAK CHINESE TALKING FROM CRUDE SEPARATED AUDIO
+				// Only keep BGM if the user chose a real music file outside SeparatedAudio
+				if (!string.IsNullOrEmpty(vm.AudioMix.BgmTrackPath) && vm.AudioMix.BgmTrackPath.Contains("SeparatedAudio"))
 				{
-					string bgmTrack = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "SeparatedAudio", projId, "bgm_track.wav");
-					if (File.Exists(bgmTrack))
-					{
-						vm.AudioMix.BgmTrackPath = bgmTrack;
-						vm.AudioMix.IsBgmMuted = false;
-						if (vm.AudioMix.BgmVolume <= 0.05) vm.AudioMix.BgmVolume = 0.25;
-						Log($"PreExportSync: Attached background music track: {bgmTrack}");
-					}
+					vm.AudioMix.IsBgmMuted = true;
+					vm.AudioMix.BgmVolume = 0.0;
+					vm.AudioMix.BgmTrackPath = null;
+				}
+				else if (string.IsNullOrEmpty(vm.AudioMix.BgmTrackPath) || !File.Exists(vm.AudioMix.BgmTrackPath))
+				{
+					vm.AudioMix.IsBgmMuted = true;
+					vm.AudioMix.BgmVolume = 0.0;
 				}
 			}
 
@@ -1866,6 +1866,13 @@ public static class Hook
 				vm.AudioMix.OriginalAudioVolume = 0.0;
 				vm.AudioMix.IsKhmerMuted = false;
 				vm.AudioMix.KhmerDubVolume = 3.0;
+
+				if (!string.IsNullOrEmpty(vm.AudioMix.BgmTrackPath) && vm.AudioMix.BgmTrackPath.Contains("SeparatedAudio"))
+				{
+					vm.AudioMix.IsBgmMuted = true;
+					vm.AudioMix.BgmVolume = 0.0;
+					vm.AudioMix.BgmTrackPath = null;
+				}
 			}
 
 			// 3. Obtain displayed video bounds on the UI preview canvas
@@ -1943,7 +1950,7 @@ public static class Hook
 					if (blur == null || blur.EndMs <= blur.StartMs) continue;
 
 					// Compute normalized relative coordinates inside the UI video bounds
-					(double relX, double relY, double relW, double relH) = GetOrComputeBlurNormalizedCoords(blur, videoBounds);
+					(double relX, double relY, double relW, double relH) = GetOrComputeBlurNormalizedCoords(blur, videoBounds, vm);
 
 					// Desired pixel coordinates on FFmpeg [vscaled] canvas
 					double targetX = padX + (relX * scaledW);
@@ -2594,7 +2601,7 @@ public static class Hook
 
 			StackPanel curVerCol = new StackPanel();
 			curVerCol.Children.Add(new TextBlock { Text = "CURRENT VERSION", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)) });
-			TextBlock txtCurVer = new TextBlock { Text = "2.0.1", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
+			TextBlock txtCurVer = new TextBlock { Text = "2.0.2", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
 			curVerCol.Children.Add(txtCurVer);
 			infoGrid.Children.Add(curVerCol);
 
@@ -2772,7 +2779,7 @@ public static class Hook
 			dialog.Content = root;
 
 			// Logic & State
-			string currentVer = "2.0.1";
+			string currentVer = "2.0.2";
 			string latestVer = currentVer;
 			string downloadUrl = "";
 			string sha256Expected = "";
@@ -2808,7 +2815,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.1");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.2");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -2832,7 +2839,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.1");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.2");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -2885,9 +2892,9 @@ public static class Hook
 					{
 						setBadge("Up to Date", "#059669");
 						txtStatus.Text = "No updates available.";
-						txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.1).\nAll latest features and enhancements are active.";
+						txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.2).\nAll latest features and enhancements are active.";
 						progressCard.Visibility = Visibility.Collapsed;
-						MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.1).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+						MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.2).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 					}
 				}
 				catch (Exception)
@@ -2895,9 +2902,9 @@ public static class Hook
 					progressBar.IsIndeterminate = false;
 					setBadge("Up to Date", "#059669");
 					txtStatus.Text = "No updates available.";
-					txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.0).";
+					txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.2).";
 					progressCard.Visibility = Visibility.Collapsed;
-					MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.0).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+					MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.2).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 				}
 				finally
 				{
@@ -2922,7 +2929,7 @@ public static class Hook
 				progressBar.Value = 0;
 
 				txtStatus.Text = "Preparing download...";
-				txtStats.Text = "Connecting to GitHub Releases...";
+				txtStats.Text = "Connecting to update server...";
 
 				cts = new CancellationTokenSource();
 				string tempDir = Path.Combine(Path.GetTempPath(), "ToolDubberUpdates");
@@ -2931,45 +2938,79 @@ public static class Hook
 
 				try
 				{
-					using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-					http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.0");
-
-					using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-					resp.EnsureSuccessStatusCode();
-
-					long total = resp.Content.Headers.ContentLength ?? -1L;
-					using var srcStream = await resp.Content.ReadAsStreamAsync(cts.Token);
-					using var dstStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true);
-
-					byte[] buf = new byte[65536];
-					long readTotal = 0;
-					int r;
-					var sw = Stopwatch.StartNew();
-					long lastRead = 0;
-					TimeSpan lastT = sw.Elapsed;
-
-					while ((r = await srcStream.ReadAsync(buf, 0, buf.Length, cts.Token)) > 0)
+					bool downloadDone = false;
+					string[] localCandidates = new[]
 					{
-						await dstStream.WriteAsync(buf, 0, r, cts.Token);
-						readTotal += r;
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.2.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.2.exe")
+					};
 
-						TimeSpan curT = sw.Elapsed;
-						double diffSec = (curT - lastT).TotalSeconds;
-						if (diffSec >= 0.25 || readTotal == total)
+					try
+					{
+						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.2");
+
+						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+						if (resp.IsSuccessStatusCode)
 						{
-							long bytesDiff = readTotal - lastRead;
-							double speed = diffSec > 0 ? (bytesDiff / (1024.0 * 1024.0)) / diffSec : 0.0;
-							int pct = total > 0 ? (int)((readTotal * 100) / total) : 0;
+							long total = resp.Content.Headers.ContentLength ?? -1L;
+							using var srcStream = await resp.Content.ReadAsStreamAsync(cts.Token);
+							using var dstStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true);
 
-							progressBar.Value = pct;
-							txtStatus.Text = $"Downloading... {pct}%";
-							double downMB = Math.Round(readTotal / (1024.0 * 1024.0), 1);
-							double totMB = Math.Round(total / (1024.0 * 1024.0), 1);
-							txtStats.Text = $"{downMB} MB / {totMB} MB ({speed:0.0} MB/s)";
+							byte[] buf = new byte[65536];
+							long readTotal = 0;
+							int r;
+							var sw = Stopwatch.StartNew();
+							long lastRead = 0;
+							TimeSpan lastT = sw.Elapsed;
 
-							lastRead = readTotal;
-							lastT = curT;
+							while ((r = await srcStream.ReadAsync(buf, 0, buf.Length, cts.Token)) > 0)
+							{
+								await dstStream.WriteAsync(buf, 0, r, cts.Token);
+								readTotal += r;
+
+								TimeSpan curT = sw.Elapsed;
+								double diffSec = (curT - lastT).TotalSeconds;
+								if (diffSec >= 0.25 || readTotal == total)
+								{
+									long bytesDiff = readTotal - lastRead;
+									double speed = diffSec > 0 ? (bytesDiff / (1024.0 * 1024.0)) / diffSec : 0.0;
+									int pct = total > 0 ? (int)((readTotal * 100) / total) : 0;
+
+									progressBar.Value = pct;
+									txtStatus.Text = $"Downloading... {pct}%";
+									double downMB = Math.Round(readTotal / (1024.0 * 1024.0), 1);
+									double totMB = Math.Round(total / (1024.0 * 1024.0), 1);
+									txtStats.Text = $"{downMB} MB / {totMB} MB ({speed:0.0} MB/s)";
+
+									lastRead = readTotal;
+									lastT = curT;
+								}
+							}
+							downloadDone = true;
 						}
+					}
+					catch { }
+
+					if (!downloadDone)
+					{
+						foreach (string cand in localCandidates)
+						{
+							if (File.Exists(cand) && new FileInfo(cand).Length > 10000000)
+							{
+								File.Copy(cand, tempPath, true);
+								downloadDone = true;
+								txtStatus.Text = "Using local package...";
+								break;
+							}
+						}
+					}
+
+					if (!downloadDone || !File.Exists(tempPath))
+					{
+						throw new InvalidOperationException($"Could not download update from {downloadUrl}. Please check your connection or download from GitHub Releases.");
 					}
 
 					// Verify SHA-256
@@ -4149,6 +4190,30 @@ del ""%~f0""
 			MediaElement player = FindVisualChild((DependencyObject)(object)window, (MediaElement me) => me.Name == "PreviewPlayer");
 			if (player == null) return;
 
+			_previewLiveKhmerPlayer.MediaOpened += (s, e) =>
+			{
+				try
+				{
+					_previewLiveKhmerPlayer.Volume = 1.0;
+					if (vm.IsPlaying) _previewLiveKhmerPlayer.Play();
+				}
+				catch { }
+			};
+
+			player.MediaOpened += (s, e) =>
+			{
+				try
+				{
+					bool isPreRendered = player.Source != null && player.Source.LocalPath.Contains("PreviewCache");
+					if (!isPreRendered)
+					{
+						player.IsMuted = true;
+						player.Volume = 0.0;
+					}
+				}
+				catch { }
+			};
+
 			Slider slider = FindVisualChild((DependencyObject)(object)window, (Slider s) => s.Name == "TimelineSlider");
 			if (slider != null)
 			{
@@ -4190,7 +4255,7 @@ del ""%~f0""
 					}
 
 					// Raw original video: MUTE CHINESE AUDIO COMPLETELY
-					if (!player.IsMuted)
+					if (!player.IsMuted || player.Volume > 0.0)
 					{
 						player.IsMuted = true;
 						player.Volume = 0.0;
@@ -4252,14 +4317,9 @@ del ""%~f0""
 						}
 					}
 
-					// 2. Background Music Playback
-					string projId = vm.CurrentProject.Id ?? "";
+					// 2. Background Music Playback (Only for external music, never crude SeparatedAudio)
 					string bgmPath = vm.AudioMix?.BgmTrackPath;
-					if (string.IsNullOrEmpty(bgmPath) || !File.Exists(bgmPath))
-					{
-						bgmPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "SeparatedAudio", projId, "bgm_track.wav");
-					}
-					if (File.Exists(bgmPath) && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
+					if (!string.IsNullOrEmpty(bgmPath) && File.Exists(bgmPath) && !bgmPath.Contains("SeparatedAudio") && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
 					{
 						if (_previewLiveBgmPlayer.Source == null || !_previewLiveBgmPlayer.Source.LocalPath.Equals(Path.GetFullPath(bgmPath), StringComparison.OrdinalIgnoreCase))
 						{
@@ -10971,9 +11031,81 @@ del ""%~f0""
 		}
 	}
 
-	private static (double relX, double relY, double relW, double relH) GetOrComputeBlurNormalizedCoords(BlurRegionItem blur, Rect bounds)
+	private static void SuppressBuiltInBlurPlaceholders(Window win)
 	{
-		if (blur == null) return (0.1, 0.7, 0.8, 0.12);
+		if (win == null) return;
+		try
+		{
+			// 1. Eradicate all TextBlocks containing "[BLUR ORIGINAL CHINESE TITLE]"
+			foreach (TextBlock tb in FindAllVisualChildren<TextBlock>((DependencyObject)(object)win))
+			{
+				if (!string.IsNullOrEmpty(tb.Text) && (tb.Text.IndexOf("BLUR", StringComparison.OrdinalIgnoreCase) >= 0 || tb.Text.IndexOf("CHINESE TITLE", StringComparison.OrdinalIgnoreCase) >= 0))
+				{
+					tb.Text = "";
+					tb.Visibility = Visibility.Collapsed;
+					tb.Opacity = 0.0;
+					Border parentBorder = FindAncestor<Border>((DependencyObject)(object)tb);
+					if (parentBorder != null)
+					{
+						parentBorder.BorderBrush = Brushes.Transparent;
+						parentBorder.BorderThickness = new Thickness(0);
+						parentBorder.Background = Brushes.Transparent;
+						parentBorder.Visibility = Visibility.Collapsed;
+						parentBorder.Opacity = 0.0;
+					}
+				}
+			}
+
+			// 2. Eradicate any Border with cyan border brush that was generated by SnaDubber for blur
+			foreach (Border b in FindAllVisualChildren<Border>((DependencyObject)(object)win))
+			{
+				if (b.BorderBrush is SolidColorBrush scb)
+				{
+					Color c = scb.Color;
+					if ((c.R == 6 && c.G == 182 && c.B == 212) || (c.R == 56 && c.G == 189 && c.B == 248) || (c.G > 170 && c.B > 200 && c.R < 80))
+					{
+						if (b.Child is TextBlock ctb && (ctb.Text ?? "").IndexOf("BLUR", StringComparison.OrdinalIgnoreCase) >= 0)
+						{
+							b.Visibility = Visibility.Collapsed;
+							b.BorderThickness = new Thickness(0);
+							b.BorderBrush = Brushes.Transparent;
+							b.Opacity = 0.0;
+						}
+						else if (FindAllVisualChildren<TextBlock>((DependencyObject)(object)b).Any(t => (t.Text ?? "").IndexOf("BLUR", StringComparison.OrdinalIgnoreCase) >= 0))
+						{
+							b.Visibility = Visibility.Collapsed;
+							b.BorderThickness = new Thickness(0);
+							b.BorderBrush = Brushes.Transparent;
+							b.Opacity = 0.0;
+						}
+					}
+				}
+			}
+
+			// 3. Ensure built-in ItemsControl with BlurRegions is completely collapsed and hidden
+			if (win.DataContext is MainViewModel vm)
+			{
+				foreach (ItemsControl items in FindAllVisualChildren<ItemsControl>((DependencyObject)(object)win))
+				{
+					Binding binding = BindingOperations.GetBinding((DependencyObject)(object)items, ItemsControl.ItemsSourceProperty);
+					if (string.Equals(binding?.Path?.Path, "BlurRegions", StringComparison.OrdinalIgnoreCase)
+						|| (vm.BlurRegions != null && ReferenceEquals(items.ItemsSource, vm.BlurRegions)))
+					{
+						items.Visibility = Visibility.Collapsed;
+						items.Opacity = 0.0;
+						items.Width = 0;
+						items.Height = 0;
+						items.IsHitTestVisible = false;
+					}
+				}
+			}
+		}
+		catch { }
+	}
+
+	private static (double relX, double relY, double relW, double relH) GetOrComputeBlurNormalizedCoords(BlurRegionItem blur, Rect bounds, MainViewModel vm = null)
+	{
+		if (blur == null) return (0.1, 0.75, 0.8, 0.12);
 		if (_blurNormalizedCoords.TryGetValue(blur, out var norm)) return norm;
 		if (!string.IsNullOrEmpty(blur.Id) && _blurNormalizedCoordsById.TryGetValue(blur.Id, out var idNorm)) return idNorm;
 
@@ -11001,19 +11133,55 @@ del ""%~f0""
 			catch { }
 		}
 
+		double projW = (vm?.CurrentProject != null && vm.CurrentProject.Width > 10.0) ? vm.CurrentProject.Width : 0.0;
+		double projH = (vm?.CurrentProject != null && vm.CurrentProject.Height > 10.0) ? vm.CurrentProject.Height : 0.0;
+
+		// 1. Primary: Use active video bounds on the UI preview canvas
 		if (bounds.Width > 10.0 && bounds.Height > 10.0)
 		{
-			double rx = Math.Clamp((blur.X - bounds.Left) / bounds.Width, 0.0, 1.0);
-			double ry = Math.Clamp((blur.Y - bounds.Top) / bounds.Height, 0.0, 1.0);
-			double rw = Math.Clamp(blur.Width / bounds.Width, 0.005, 1.0 - rx);
-			double rh = Math.Clamp(blur.Height / bounds.Height, 0.005, 1.0 - ry);
+			// If blur.Y was stored on a large canvas (e.g. 848) while bounds is smaller (e.g. 280)
+			if (blur.Y > bounds.Height * 1.2 && projH > 10.0)
+			{
+				double rx = Math.Clamp(blur.X / projW, 0.0, 1.0);
+				double ry = Math.Clamp(blur.Y / projH, 0.0, 1.0);
+				double rw = Math.Clamp(blur.Width / projW, 0.005, 1.0 - rx);
+				double rh = Math.Clamp(blur.Height / projH, 0.005, 1.0 - ry);
+				var res = (rx, ry, rw, rh);
+				_blurNormalizedCoords[blur] = res;
+				if (!string.IsNullOrEmpty(blur.Id)) _blurNormalizedCoordsById[blur.Id] = res;
+				return res;
+			}
+			else
+			{
+				double rx = Math.Clamp((blur.X - bounds.Left) / bounds.Width, 0.0, 1.0);
+				double ry = Math.Clamp((blur.Y - bounds.Top) / bounds.Height, 0.0, 1.0);
+				double rw = Math.Clamp(blur.Width / bounds.Width, 0.005, 1.0 - rx);
+				double rh = Math.Clamp(blur.Height / bounds.Height, 0.005, 1.0 - ry);
+				var res = (rx, ry, rw, rh);
+				_blurNormalizedCoords[blur] = res;
+				if (!string.IsNullOrEmpty(blur.Id)) _blurNormalizedCoordsById[blur.Id] = res;
+				return res;
+			}
+		}
+
+		// 2. Fallback: Project canvas dimensions
+		if (projW > 10.0 && projH > 10.0 && blur.Y > 1.0)
+		{
+			// If blur.Y is small (e.g. 150-250) but projH is large (e.g. 848+), blur was recorded on ~280px preview container
+			double effectiveH = (blur.Y <= 350.0 && projH >= 700.0) ? 280.0 : projH;
+			double effectiveW = (blur.Y <= 350.0 && projH >= 700.0) ? 158.0 : projW;
+
+			double rx = Math.Clamp(blur.X / effectiveW, 0.0, 1.0);
+			double ry = Math.Clamp(blur.Y / effectiveH, 0.0, 1.0);
+			double rw = Math.Clamp(blur.Width / effectiveW, 0.005, 1.0 - rx);
+			double rh = Math.Clamp(blur.Height / effectiveH, 0.005, 1.0 - ry);
 			var res = (rx, ry, rw, rh);
 			_blurNormalizedCoords[blur] = res;
 			if (!string.IsNullOrEmpty(blur.Id)) _blurNormalizedCoordsById[blur.Id] = res;
 			return res;
 		}
 
-		return (0.1, 0.7, 0.8, 0.12);
+		return (0.1, 0.75, 0.8, 0.12);
 	}
 
 	private static void UpdateBlurNormalizedCoordinates(BlurRegionItem blur, Canvas canvas, MainViewModel vm)
@@ -11051,22 +11219,11 @@ del ""%~f0""
 		{
 			if (vm.BlurRegions == null) return;
 
-			// Ensure built-in ItemsControl with [BLUR ORIGINAL CHINESE TITLE] remains collapsed
+			// Ensure built-in ugly cyan border and [BLUR ORIGINAL CHINESE TITLE] remains 100% collapsed
 			Window win = Window.GetWindow(canvas) ?? Application.Current?.MainWindow;
 			if (win != null)
 			{
-				foreach (ItemsControl items in FindAllVisualChildren<ItemsControl>((DependencyObject)(object)win))
-				{
-					Binding binding = BindingOperations.GetBinding((DependencyObject)(object)items, ItemsControl.ItemsSourceProperty);
-					if (string.Equals(binding?.Path?.Path, "BlurRegions", StringComparison.Ordinal)
-						|| string.Equals(binding?.Path?.Path, "Overlays", StringComparison.Ordinal)
-						|| (vm.BlurRegions != null && ReferenceEquals(items.ItemsSource, vm.BlurRegions))
-						|| (vm.Overlays != null && ReferenceEquals(items.ItemsSource, vm.Overlays)))
-					{
-						items.Visibility = Visibility.Collapsed;
-						items.ItemsSource = null;
-					}
-				}
+				SuppressBuiltInBlurPlaceholders(win);
 			}
 
 			Rect videoBounds = GetDisplayedVideoBounds(canvas, vm);
@@ -11080,7 +11237,7 @@ del ""%~f0""
 
 			foreach (BlurRegionItem blur in vm.BlurRegions)
 			{
-				(double relX, double relY, double relW, double relH) = GetOrComputeBlurNormalizedCoords(blur, videoBounds);
+				(double relX, double relY, double relW, double relH) = GetOrComputeBlurNormalizedCoords(blur, videoBounds, vm);
 
 				if (!_blurRegionVisuals.TryGetValue(blur, out BlurRegionVisual visual))
 				{

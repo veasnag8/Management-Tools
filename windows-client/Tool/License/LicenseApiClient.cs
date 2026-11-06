@@ -149,9 +149,46 @@ namespace Tool.License
             {
                 var url = $"{_baseUrl}/v1/version?product={Uri.EscapeDataString(productCode)}&current_version={Uri.EscapeDataString(currentVersion)}";
                 using var response = await _httpClient.GetAsync(url, ct);
-                var json = await response.Content.ReadAsStringAsync(ct);
-                return JsonSerializer.Deserialize<ApiResponse<VersionResponseData>>(json)
-                    ?? new ApiResponse<VersionResponseData> { Success = false, Error = new ApiError { Code = "DESERIALIZE_ERROR", Message = "Malformed server response." } };
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync(ct);
+                    var parsed = JsonSerializer.Deserialize<ApiResponse<VersionResponseData>>(json);
+                    if (parsed != null && parsed.Success && parsed.Data != null)
+                    {
+                        return parsed;
+                    }
+                }
+            }
+            catch { }
+
+            // Automatic fallback to GitHub raw version.json if Cloudflare worker fails or returns 500
+            try
+            {
+                using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                string ghUrl = $"https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t={DateTime.UtcNow.Ticks}";
+                using var ghResp = await ghClient.GetAsync(ghUrl, ct);
+                if (ghResp.IsSuccessStatusCode)
+                {
+                    var ghJson = await ghResp.Content.ReadAsStringAsync(ct);
+                    using var doc = JsonDocument.Parse(ghJson);
+                    var root = doc.RootElement;
+                    var data = new VersionResponseData
+                    {
+                        CurrentVersion = currentVersion,
+                        LatestVersion = root.TryGetProperty("latest_version", out var lv) ? (lv.GetString() ?? currentVersion) : currentVersion,
+                        DownloadUrl = root.TryGetProperty("download_url", out var du) ? (du.GetString() ?? "") : "",
+                        ReleaseNotes = root.TryGetProperty("release_notes", out var rn) ? (rn.GetString() ?? "") : "",
+                        Sha256 = root.TryGetProperty("sha256", out var sha) ? (sha.GetString() ?? "") : "",
+                        Mandatory = root.TryGetProperty("mandatory", out var man) && man.GetBoolean(),
+                        HasUpdate = root.TryGetProperty("has_update", out var hu) && hu.GetBoolean()
+                    };
+                    if (Version.TryParse(data.LatestVersion, out var remoteVer) && Version.TryParse(currentVersion, out var localVer))
+                    {
+                        data.HasUpdate = remoteVer > localVer;
+                    }
+                    return new ApiResponse<VersionResponseData> { Success = true, Data = data };
+                }
             }
             catch (Exception ex)
             {
@@ -161,6 +198,12 @@ namespace Tool.License
                     Error = new ApiError { Code = "NETWORK_ERROR", Message = ex.Message }
                 };
             }
+
+            return new ApiResponse<VersionResponseData>
+            {
+                Success = false,
+                Error = new ApiError { Code = "VERSION_CHECK_FAILED", Message = "Unable to retrieve version info." }
+            };
         }
 
         private async Task<ApiResponse<TRes>> PostJsonAsync<TReq, TRes>(

@@ -1,9 +1,9 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.0.1",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.1/ToolDubber-Setup-v2.0.1.exe",
-  "release_notes": "កំណែថ្មី Version 2.0.1 រួមមាន:\n1. ពេល Preview Play ក្នុង Tool គឺបិទសំឡេងដើម (ចិន) ទាំងស្រុង ហើយបន្លឺសំឡេងបកប្រែជាភាសាខ្មែរ (Khmer Neural Dubbing) ស្របតាមវីដេអូភ្លាមៗ\n2. ពេល Export វីដេអូចុងក្រោយ ធានា ១០០% ជាប់សំឡេងនិយាយភាសាខ្មែរយ៉ាងច្បាស់ រួមជាមួយភ្លេង BGM ស្រទន់\n3. Blur Tool រចនាថ្មី បែប frosted blur ស្អាត គ្មានស៊ុម (No Frame/Border) និងគ្មានអក្សររំខានទៀតទេ\n4. ទីតាំង Blur ត្រូវបានតម្រូវយ៉ាងសុក្រឹតចំកន្លែងដែលអ្នកបានដាក់ ទាំងទម្រង់ 16:9 និង 9:16\n5. ប្រព័ន្ធត្រួតពិនិត្យ និងដំឡើង Update ដោយស្វ័យប្រវត្តិកាន់តែរលូន",
-  "sha256": "474f4c5938e35abe95370edcd3e8c56c379a8e788f4816b8244a6420c7f15511",
+  "latest_version": "2.0.2",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.2/ToolDubber-Setup-v2.0.2.exe",
+  "release_notes": "កំណែថ្មី Version 2.0.2 រួមមាន:\n1. ពេល Preview Play លើ Tool គឺបិទសំឡេងចិនដើមទាំងស្រុង ហើយបន្លឺសំឡេងបកប្រែជាភាសាខ្មែរ (Khmer Neural Voice) យ៉ាងរលូនស្របតាមរូបភាព\n2. ពេល Export វីដេអូចុងក្រោយ ធានា ១០០% ជាប់សំឡេងនិយាយភាសាខ្មែរច្បាស់ល្អ គ្មានជាប់សំឡេងចិនដើម\n3. Blur Tool រចនាបែប Frosted Blur ស្អាត គ្មានស៊ុមពណ៌ខៀវ (No Frame/Border) និងគ្មានអក្សរ [BLUR ORIGINAL CHINESE TITLE] រំខានលើ Preview ទៀតឡើយ\n4. ទីតាំង Blur ក្នុងវីដេអូ Export ចំចំណងជើងរង (Subtitles) យ៉ាងសុក្រឹត ១០០% ទាំងទម្រង់ 16:9 និង 9:16 (លែងខុសទីតាំងទៅលើថ្ងាសទៀតហើយ)\n5. ប្រព័ន្ធ Check for Updates ដំណើរការ ១០០% អាចស្វែងរកឃើញ Version 2.0.2 និងដំឡើងដោយស្វ័យប្រវត្តិ",
+  "sha256": "b71ce6d5b6d31da6c4208adeb93525a05c6a08e6e08fe35df0c1c1bc6d0e34dd",
   "mandatory": false
 }
