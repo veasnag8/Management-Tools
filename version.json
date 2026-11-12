@@ -1,9 +1,9 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.0.4",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.4/ToolDubber-Setup-v2.0.4.exe",
-  "release_notes": "កំណែថ្មី Version 2.0.4 រួមមាន:\n1. Auto-Update Center រចនាថ្មីស្អាត មានរបារភាគរយពណ៌បៃតង-ខៀវ និងល្បឿនទាញយកច្បាស់លាស់\n2. ដំឡើង Update ស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) ដោយមិនបង្ហាញផ្ទាំង Setup រំខាន ហើយបើកកម្មវិធីឡើងវិញភ្លាមៗព្រមទាំងបង្ហាញផ្ទាំង Update Summary\n3. ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor ដូចដើម)\n4. រក្សាមុខងារបកប្រែសំឡេងខ្មែរ (Preview & Export) និង Frosted Blur ឥតស៊ុម ១០០%",
-  "sha256": "e5e957c8b8f91e3a0ac8779a93a892091b52580f6f2c30c6119498f4eba26a59",
+  "latest_version": "2.0.5",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.5/ToolDubber-Setup-v2.0.5.exe",
+  "release_notes": "កំណែថ្មី Version 2.0.5 រួមមាន:\n1. Split Videos រហ័សទាន់ចិត្ត៖ បំបែកវីដេអូជាភាគៗ (Parallel Stream-Copy) យ៉ាងលឿន ដោយមិនទាន់ Translate/Export ស្វ័យប្រវត្តិទេ — ចុចប៊ូតុង Translate នៅពេលអ្នកចង់បកប្រែភាគនីមួយៗ\n2. Auto-Update Center រចនាថ្មីស្អាត មានរបារភាគរយពណ៌បៃតង-ខៀវ និងល្បឿនទាញយកច្បាស់លាស់\n3. ដំឡើង Update ស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) ដោយមិនបង្ហាញផ្ទាំង Setup រំខាន ហើយបើកកម្មវិធីឡើងវិញភ្លាមៗព្រមទាំងបង្ហាញផ្ទាំង Update Summary\n4. ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor ដូចដើម)",
+  "sha256": "9d448413ef6d05f433983569c4385769cbbab1b4adcb9c13ad576e072a8d79c7",
   "mandatory": false
 }

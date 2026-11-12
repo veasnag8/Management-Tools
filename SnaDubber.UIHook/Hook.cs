@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.0.4";
+			window.Title = "SNA-Dubber Version 2.0.5";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -2541,7 +2541,7 @@ public static class Hook
 			try { File.Delete(markerPath); } catch { }
 
 			using var doc = System.Text.Json.JsonDocument.Parse(json);
-			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.4") : "2.0.4";
+			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.5") : "2.0.5";
 			string notes = doc.RootElement.TryGetProperty("release_notes", out var nEl) ? (nEl.GetString() ?? "") : "";
 
 			window.Dispatcher.BeginInvoke((Action)(() =>
@@ -2640,7 +2640,7 @@ public static class Hook
 			Grid.SetRow(headerGrid, 0);
 			root.Children.Add(headerGrid);
 
-			// Row 1: Compact Version Bar (Current: v2.0.4 -> Latest: v2.0.4   [Up to Date ✓])
+			// Row 1: Compact Version Bar (Current: v2.0.5 -> Latest: v2.0.5   [Up to Date ✓])
 			Border infoCard = new Border
 			{
 				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
@@ -2656,10 +2656,10 @@ public static class Hook
 
 			StackPanel verRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(new TextBlock { Text = "Current: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtCurVer = new TextBlock { Text = "v2.0.4", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtCurVer = new TextBlock { Text = "v2.0.5", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtCurVer);
 			verRow.Children.Add(new TextBlock { Text = "  →  Latest: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.4", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.5", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtLatestVer);
 			infoGrid.Children.Add(verRow);
 
@@ -2747,6 +2747,35 @@ public static class Hook
 			root.Children.Add(progressPanel);
 
 			// Row 3: Action Buttons
+			Action<Button, double> applyDarkBtnTemplate = (btn, radius) =>
+			{
+				var borderFactory = new FrameworkElementFactory(typeof(Border), "bd");
+				borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(radius));
+				borderFactory.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Background") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+				borderFactory.SetBinding(Border.BorderBrushProperty, new System.Windows.Data.Binding("BorderBrush") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+				borderFactory.SetBinding(Border.BorderThicknessProperty, new System.Windows.Data.Binding("BorderThickness") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+				borderFactory.SetBinding(Border.PaddingProperty, new System.Windows.Data.Binding("Padding") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+
+				var cpFactory = new FrameworkElementFactory(typeof(ContentPresenter));
+				cpFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+				cpFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+				borderFactory.AppendChild(cpFactory);
+
+				var tpl = new ControlTemplate(typeof(Button)) { VisualTree = borderFactory };
+				var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+				disabledTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(22, 31, 48)), "bd"));
+				disabledTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(51, 65, 85)), "bd"));
+				disabledTrigger.Setters.Add(new Setter(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(100, 116, 139))));
+				tpl.Triggers.Add(disabledTrigger);
+
+				var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+				hoverTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.9, "bd"));
+				tpl.Triggers.Add(hoverTrigger);
+
+				btn.Template = tpl;
+			};
+			applyDarkBtnTemplate(btnClose, 15);
+
 			StackPanel actionRow = new StackPanel
 			{
 				Orientation = Orientation.Horizontal,
@@ -2766,7 +2795,7 @@ public static class Hook
 				Margin = new Thickness(0, 0, 10, 0),
 				Cursor = Cursors.Hand
 			};
-			SetControlCornerRadius(btnCheck, 8);
+			applyDarkBtnTemplate(btnCheck, 8);
 			actionRow.Children.Add(btnCheck);
 
 			Button btnRetry = new Button
@@ -2775,11 +2804,13 @@ public static class Hook
 				Padding = new Thickness(14, 8, 14, 8),
 				Background = new SolidColorBrush(Color.FromRgb(185, 28, 28)),
 				Foreground = Brushes.White,
+				BorderBrush = new SolidColorBrush(Color.FromRgb(220, 38, 38)),
+				BorderThickness = new Thickness(1),
 				Margin = new Thickness(0, 0, 10, 0),
 				Cursor = Cursors.Hand,
 				Visibility = Visibility.Collapsed
 			};
-			SetControlCornerRadius(btnRetry, 8);
+			applyDarkBtnTemplate(btnRetry, 8);
 			actionRow.Children.Add(btnRetry);
 
 			Button btnUpdate = new Button
@@ -2795,7 +2826,7 @@ public static class Hook
 				Margin = new Thickness(0, 0, 10, 0),
 				Cursor = Cursors.Hand
 			};
-			SetControlCornerRadius(btnUpdate, 8);
+			applyDarkBtnTemplate(btnUpdate, 8);
 			actionRow.Children.Add(btnUpdate);
 
 			Button btnLater = new Button
@@ -2808,7 +2839,7 @@ public static class Hook
 				BorderThickness = new Thickness(1),
 				Cursor = Cursors.Hand
 			};
-			SetControlCornerRadius(btnLater, 8);
+			applyDarkBtnTemplate(btnLater, 8);
 			actionRow.Children.Add(btnLater);
 
 			Grid.SetRow(actionRow, 3);
@@ -2833,7 +2864,7 @@ public static class Hook
 
 			TextBlock txtNotesHeader = new TextBlock
 			{
-				Text = "📦 ព័ត៌មាន Update (v2.0.4):",
+				Text = "📦 ព័ត៌មាន Update (v2.0.5):",
 				FontSize = 13,
 				FontWeight = FontWeights.Bold,
 				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
@@ -2863,7 +2894,7 @@ public static class Hook
 			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 			TextBlock txtNotes = new TextBlock
 			{
-				Text = "កំណែថ្មី Version 2.0.4 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
+				Text = "កំណែថ្មី Version 2.0.5 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
 				FontSize = 12.5,
 				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
 				TextWrapping = TextWrapping.Wrap,
@@ -2880,7 +2911,7 @@ public static class Hook
 			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = "2.0.4";
+			string currentVer = "2.0.5";
 			string latestVer = currentVer;
 			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
@@ -2934,7 +2965,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.4");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.5");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -2958,7 +2989,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.4");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.5");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -3062,14 +3093,14 @@ public static class Hook
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
 						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.4.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.4.exe")
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.5.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.5.exe")
 					};
 
 					try
 					{
 						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.4");
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.5");
 
 						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 						if (resp.IsSuccessStatusCode)
@@ -3320,7 +3351,7 @@ del ""%~f0""
 		Button all = new Button { Content = "✓ Select all", Height = 30, Margin = new Thickness(0, 0, 7, 0), Padding = new Thickness(12, 4, 12, 4), Foreground = new SolidColorBrush(Color.FromRgb(125, 211, 252)), Background = cardBrush, BorderBrush = borderBrush };
 		Button none = new Button { Content = "Clear selection", Height = 30, Padding = new Thickness(12, 4, 12, 4), Foreground = mutedBrush, Background = cardBrush, BorderBrush = borderBrush };
 		Button cancel = new Button { Content = "Cancel", Width = 105, Height = 38, Margin = new Thickness(5), Foreground = Brushes.White, Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)), BorderBrush = borderBrush };
-		Button start = new Button { Content = "▶  Start automatic processing", Width = 235, Height = 38, Margin = new Thickness(5), Background = accentBrush, BorderBrush = accentBrush, Foreground = Brushes.White, FontWeight = FontWeights.SemiBold };
+		Button start = new Button { Content = "✂  Split Episodes Now", Width = 215, Height = 38, Margin = new Thickness(5), Background = accentBrush, BorderBrush = accentBrush, Foreground = Brushes.White, FontWeight = FontWeights.SemiBold };
 		all.Click += (s, e) => plans.ForEach(p => p.CheckBox.IsChecked = true);
 		none.Click += (s, e) => plans.ForEach(p => p.CheckBox.IsChecked = false);
 		StackPanel selectRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) }; selectRow.Children.Add(all); selectRow.Children.Add(none);
@@ -3335,8 +3366,8 @@ del ""%~f0""
 		ScrollViewer scroll = new ScrollViewer { Content = list, Height = 275, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = panelBrush, BorderBrush = borderBrush, BorderThickness = new Thickness(1) };
 		StackPanel actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) }; actions.Children.Add(cancel); actions.Children.Add(start);
 		StackPanel body = new StackPanel { Margin = new Thickness(22) };
-		body.Children.Add(new TextBlock { Text = "Episode Split & Automatic Khmer Export", Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), FontSize = 20, FontWeight = FontWeights.Bold });
-		body.Children.Add(new TextBlock { Text = "Choose one split method, select episodes, then let SNA-Dubber process them automatically.", Foreground = mutedBrush, FontSize = 11, Margin = new Thickness(0, 4, 0, 16) });
+		body.Children.Add(new TextBlock { Text = "Split Videos into Episodes", Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), FontSize = 20, FontWeight = FontWeights.Bold });
+		body.Children.Add(new TextBlock { Text = "Fast split into episodes only (no automatic translate). Click Translate when you want to translate an episode.", Foreground = mutedBrush, FontSize = 11, Margin = new Thickness(0, 4, 0, 16) });
 		body.Children.Add(modeGrid); body.Children.Add(summary); body.Children.Add(selectRow); body.Children.Add(scroll); body.Children.Add(actions);
 		Border shell = new Border { Child = body, Background = new SolidColorBrush(Color.FromRgb(8, 18, 34)), BorderBrush = accentBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10) };
 		Window dialog = new Window { Title = "Split Episodes", Owner = owner, WindowStartupLocation = WindowStartupLocation.CenterOwner, Width = 760, Height = 665, MinWidth = 720, MinHeight = 620, ResizeMode = ResizeMode.CanResize, ShowInTaskbar = false, Background = new SolidColorBrush(Color.FromRgb(4, 10, 20)), Content = shell };
@@ -3356,66 +3387,82 @@ del ""%~f0""
 	{
 		string originalVideo = vm.CurrentProject.VideoPath;
 		string baseName = Path.GetFileNameWithoutExtension(originalVideo);
-		string outputRoot = Path.Combine(Path.GetDirectoryName(originalVideo) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), baseName + "_Episodes_Khmer");
-		string workRoot = Path.Combine(Path.GetTempPath(), "SNA-Dubber", "EpisodeSplit", Guid.NewGuid().ToString("N"));
-		Directory.CreateDirectory(outputRoot); Directory.CreateDirectory(workRoot);
+		string outputRoot = Path.Combine(Path.GetDirectoryName(originalVideo) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), baseName + "_Episodes");
+		Directory.CreateDirectory(outputRoot);
 		vm.Episodes.Clear();
 		foreach (EpisodeBatchItem plan in selected)
 		{
 			vm.Episodes.Add(new EpisodeItem { Number = plan.Number, Title = $"Episode {plan.Number}", DurationText = TimeSpan.FromSeconds(plan.DurationSec).ToString("hh\\:mm\\:ss"), VideoPath = string.Empty, TranscriptionStatus = "Queued" });
 		}
 		vm.IsBusy = true;
+		vm.BusyProgressPercent = 0;
+		vm.BusyStatusText = $"Splitting {selected.Count} episode(s) quickly...";
 		try
 		{
 			int done = 0;
-			foreach (EpisodeBatchItem plan in selected)
+			object lockObj = new object();
+			using SemaphoreSlim gate = new SemaphoreSlim(4, 4);
+			string firstSplitPath = null;
+
+			var tasks = selected.Select(async plan =>
 			{
-				EpisodeItem episode = vm.Episodes.First(item => item.Number == plan.Number);
-				string episodeDir = Path.Combine(outputRoot, $"Episode_{plan.Number:00}");
-				Directory.CreateDirectory(episodeDir);
-				string splitPath = Path.Combine(workRoot, $"Episode_{plan.Number:00}_source.mp4");
-				string finalPath = Path.Combine(episodeDir, $"Episode_{plan.Number:00}_Khmer.mp4");
+				await gate.WaitAsync();
 				try
 				{
-					episode.TranscriptionStatus = "Splitting";
-					vm.BusyProgressPercent = done * 100.0 / selected.Count;
-					vm.BusyStatusText = $"Episode {plan.Number}: splitting source video...";
+					EpisodeItem episode = null;
+					owner.Dispatcher.Invoke(() =>
+					{
+						episode = vm.Episodes.First(item => item.Number == plan.Number);
+						episode.TranscriptionStatus = "Splitting";
+					});
+
+					string splitPath = Path.Combine(outputRoot, $"Episode_{plan.Number:00}.mp4");
 					await SplitEpisodeVideoAsync(originalVideo, splitPath, plan.StartSec, plan.DurationSec);
-					episode.VideoPath = splitPath;
-					await vm.LoadVideoFileAsync(splitPath);
-					episode.TranscriptionStatus = "Transcribing";
-					vm.BusyStatusText = $"Episode {plan.Number}: transcribing and translating Khmer...";
-					if (vm.TranscribeAudioCommand != null) await vm.TranscribeAudioCommand.ExecuteAsync(null);
-					await RunFullPipelineAsync(vm, owner);
-					vm.BusyStatusText = $"Episode {plan.Number}: exporting final video...";
-					IEnumerable<OverlayItem> exportOverlays = AddTextLayersToExportOverlays(vm.Overlays, vm.TextLayers);
-					FieldInfo ffmpegField = typeof(MainViewModel).GetField("_ffmpegService", BindingFlags.Instance | BindingFlags.NonPublic);
-					if (ffmpegField?.GetValue(vm) is not IFFmpegService ffmpeg) throw new InvalidOperationException("FFmpeg export service is unavailable.");
-					SocialPreset preset = vm.SelectedSocialPreset ?? vm.SocialPresets.First();
-					bool ok = await ffmpeg.ExportVideoAsync(splitPath, finalPath, preset, vm.BlurRegions, exportOverlays, vm.TextLayers, vm.DialogueLines, vm.AudioMix, null, CancellationToken.None);
-					if (!ok || !File.Exists(finalPath)) throw new InvalidOperationException("Final episode export was not created.");
-					episode.VideoPath = finalPath; episode.TranscriptionStatus = "Exported";
-					done++; vm.BusyProgressPercent = done * 100.0 / selected.Count;
+
+					owner.Dispatcher.Invoke(() =>
+					{
+						episode.VideoPath = splitPath;
+						episode.TranscriptionStatus = "Ready";
+						lock (lockObj)
+						{
+							done++;
+							if (plan.Number == selected[0].Number || firstSplitPath == null) firstSplitPath = splitPath;
+							vm.BusyProgressPercent = done * 100.0 / selected.Count;
+							vm.BusyStatusText = $"Split {done}/{selected.Count} episode(s)...";
+						}
+					});
 				}
 				catch (Exception ex)
 				{
-					episode.TranscriptionStatus = "Error";
-					Log($"Episode {plan.Number} batch error: {ex}");
+					owner.Dispatcher.Invoke(() =>
+					{
+						EpisodeItem ep = vm.Episodes.FirstOrDefault(item => item.Number == plan.Number);
+						if (ep != null) ep.TranscriptionStatus = "Error";
+					});
+					Log($"Episode {plan.Number} split error: {ex}");
 				}
 				finally
 				{
-					try { if (File.Exists(splitPath)) File.Delete(splitPath); } catch { }
-					CleanupTemporaryExportArtifacts();
-					await CleanupGeneratedProjectFilesAsync(vm);
+					gate.Release();
 				}
+			}).ToList();
+
+			await Task.WhenAll(tasks);
+
+			if (!string.IsNullOrEmpty(firstSplitPath) && File.Exists(firstSplitPath))
+			{
+				try { await vm.LoadVideoFileAsync(firstSplitPath); } catch { }
 			}
-			vm.ProjectStatusMessage = $"Episode batch finished. Results: {outputRoot}";
-			MessageBox.Show($"Episode processing finished.\n\nExported videos are in:\n{outputRoot}", "Episodes Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+
+			vm.ProjectStatusMessage = $"Split {done} episode(s) ready. Click Translate when ready. Folder: {outputRoot}";
+			MessageBox.Show(
+				$"Split into {done} episode(s) completed!\n\nSaved to:\n{outputRoot}\n\nវីដេអូត្រូវបានបំបែកជាភាគរួចរាល់ហើយ។ ចុចប៊ូតុង Translate នៅពេលអ្នកចង់បកប្រែភាគនីមួយៗ។",
+				"Episodes Split Complete",
+				MessageBoxButton.OK,
+				MessageBoxImage.Information);
 		}
 		finally
 		{
-			try { await vm.LoadVideoFileAsync(originalVideo); } catch { }
-			try { if (Directory.Exists(workRoot)) Directory.Delete(workRoot, true); } catch { }
 			vm.IsBusy = false; vm.BusyStatusText = string.Empty;
 		}
 	}
