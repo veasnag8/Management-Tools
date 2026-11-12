@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.0.5";
+			window.Title = "SNA-Dubber Version 2.0.6";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -2302,6 +2302,46 @@ public static class Hook
 			button.Click += (s, e) => ShowEpisodeBatchDialog(window, vm);
 
 			hostPanel.Children.Add(button);
+
+			Button episodesListBtn = new Button
+			{
+				Tag = "EpisodesListButton",
+				Content = vm.Episodes.Count > 0 ? $"📋 Episodes ({vm.Episodes.Count})" : "📋 Episodes",
+				ToolTip = "View split episodes list and load any episode to preview or translate",
+				Height = 32.0,
+				MinWidth = 115.0,
+				Margin = new Thickness(0.0, 0.0, 8.0, 0.0),
+				Cursor = Cursors.Hand,
+				Background = new LinearGradientBrush(Color.FromRgb(15, 23, 42), Color.FromRgb(30, 41, 59), 90),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+				BorderThickness = new Thickness(1.2),
+				Foreground = Brushes.White,
+				FontWeight = FontWeights.SemiBold,
+				FontSize = 11.5,
+				Padding = new Thickness(12.0, 5.0, 12.0, 5.0),
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			SetControlCornerRadius(episodesListBtn, 8);
+			AttachModernHover(episodesListBtn,
+				hoverBackground: new LinearGradientBrush(Color.FromRgb(30, 41, 59), Color.FromRgb(51, 65, 85), 90),
+				hoverBorder: new SolidColorBrush(Color.FromRgb(125, 211, 252)));
+			episodesListBtn.Click += (s, e) => ShowSplitEpisodesListDialog(window, vm);
+			if (vm.Episodes != null)
+			{
+				vm.Episodes.CollectionChanged += (s, e) =>
+				{
+					try
+					{
+						window.Dispatcher.Invoke(() =>
+						{
+							episodesListBtn.Content = vm.Episodes.Count > 0 ? $"📋 Episodes ({vm.Episodes.Count})" : "📋 Episodes";
+						});
+					}
+					catch { }
+				};
+			}
+			hostPanel.Children.Add(episodesListBtn);
+
 			_isEpisodeBatchHooked = true;
 			Log("Successfully injected Split Videos button into top header bar!");
 		}
@@ -2541,7 +2581,7 @@ public static class Hook
 			try { File.Delete(markerPath); } catch { }
 
 			using var doc = System.Text.Json.JsonDocument.Parse(json);
-			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.5") : "2.0.5";
+			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.6") : "2.0.6";
 			string notes = doc.RootElement.TryGetProperty("release_notes", out var nEl) ? (nEl.GetString() ?? "") : "";
 
 			window.Dispatcher.BeginInvoke((Action)(() =>
@@ -2640,7 +2680,7 @@ public static class Hook
 			Grid.SetRow(headerGrid, 0);
 			root.Children.Add(headerGrid);
 
-			// Row 1: Compact Version Bar (Current: v2.0.5 -> Latest: v2.0.5   [Up to Date ✓])
+			// Row 1: Compact Version Bar (Current: v2.0.6 -> Latest: v2.0.6   [Up to Date ✓])
 			Border infoCard = new Border
 			{
 				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
@@ -2656,10 +2696,10 @@ public static class Hook
 
 			StackPanel verRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(new TextBlock { Text = "Current: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtCurVer = new TextBlock { Text = "v2.0.5", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtCurVer = new TextBlock { Text = "v2.0.6", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtCurVer);
 			verRow.Children.Add(new TextBlock { Text = "  →  Latest: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.5", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.6", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtLatestVer);
 			infoGrid.Children.Add(verRow);
 
@@ -2864,7 +2904,7 @@ public static class Hook
 
 			TextBlock txtNotesHeader = new TextBlock
 			{
-				Text = "📦 ព័ត៌មាន Update (v2.0.5):",
+				Text = "📦 ព័ត៌មាន Update (v2.0.6):",
 				FontSize = 13,
 				FontWeight = FontWeights.Bold,
 				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
@@ -2894,7 +2934,7 @@ public static class Hook
 			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 			TextBlock txtNotes = new TextBlock
 			{
-				Text = "កំណែថ្មី Version 2.0.5 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
+				Text = "កំណែថ្មី Version 2.0.6 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
 				FontSize = 12.5,
 				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
 				TextWrapping = TextWrapping.Wrap,
@@ -2911,7 +2951,7 @@ public static class Hook
 			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = "2.0.5";
+			string currentVer = "2.0.6";
 			string latestVer = currentVer;
 			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
@@ -2965,7 +3005,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.5");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.6");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -2989,7 +3029,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.5");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.6");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -3093,14 +3133,14 @@ public static class Hook
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
 						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.5.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.5.exe")
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.6.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.6.exe")
 					};
 
 					try
 					{
 						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.5");
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.6");
 
 						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 						if (resp.IsSuccessStatusCode)
@@ -3455,15 +3495,227 @@ del ""%~f0""
 			}
 
 			vm.ProjectStatusMessage = $"Split {done} episode(s) ready. Click Translate when ready. Folder: {outputRoot}";
-			MessageBox.Show(
-				$"Split into {done} episode(s) completed!\n\nSaved to:\n{outputRoot}\n\nវីដេអូត្រូវបានបំបែកជាភាគរួចរាល់ហើយ។ ចុចប៊ូតុង Translate នៅពេលអ្នកចង់បកប្រែភាគនីមួយៗ។",
-				"Episodes Split Complete",
-				MessageBoxButton.OK,
-				MessageBoxImage.Information);
+			ShowSplitEpisodesListDialog(owner, vm, outputRoot);
 		}
 		finally
 		{
 			vm.IsBusy = false; vm.BusyStatusText = string.Empty;
+		}
+	}
+
+	private static void ShowSplitEpisodesListDialog(Window owner, MainViewModel vm, string folderOverride = null)
+	{
+		try
+		{
+			SolidColorBrush bgBrush = new SolidColorBrush(Color.FromRgb(8, 18, 34));
+			SolidColorBrush cardBrush = new SolidColorBrush(Color.FromRgb(15, 23, 42));
+			SolidColorBrush borderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85));
+			SolidColorBrush accentBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+			SolidColorBrush mutedBrush = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+
+			Window dialog = new Window
+			{
+				Title = "Split Episodes List",
+				Owner = owner,
+				WindowStartupLocation = WindowStartupLocation.CenterOwner,
+				Width = 680,
+				Height = 520,
+				MinWidth = 620,
+				MinHeight = 460,
+				ResizeMode = ResizeMode.CanResize,
+				ShowInTaskbar = false,
+				Background = new SolidColorBrush(Color.FromRgb(4, 10, 20)),
+				FontFamily = new FontFamily("Segoe UI, Khmer OS Battambang")
+			};
+
+			StackPanel header = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+			header.Children.Add(new TextBlock
+			{
+				Text = $"📋 Split Episodes List ({vm.Episodes?.Count ?? 0})",
+				Foreground = accentBrush,
+				FontSize = 19,
+				FontWeight = FontWeights.Bold
+			});
+			header.Children.Add(new TextBlock
+			{
+				Text = "ជ្រើសរើសភាគណាមួយដើម្បី Load ចូលកម្មវិធី រួចចុច Translate នៅពេលអ្នកចង់បកប្រែ។",
+				Foreground = mutedBrush,
+				FontSize = 11.5,
+				Margin = new Thickness(0, 4, 0, 0)
+			});
+
+			StackPanel listPanel = new StackPanel();
+			string firstFolder = folderOverride;
+
+			if (vm.Episodes == null || vm.Episodes.Count == 0)
+			{
+				listPanel.Children.Add(new TextBlock
+				{
+					Text = "មិនទាន់មានភាគវីដេអូដែលបានបំបែកនៅឡើយទេ។ សូមចុច '✂ Split Videos' ជាមុនសិន។",
+					Foreground = mutedBrush,
+					FontSize = 13,
+					Margin = new Thickness(16, 40, 16, 16),
+					HorizontalAlignment = HorizontalAlignment.Center
+				});
+			}
+			else
+			{
+				int idx = 0;
+				foreach (EpisodeItem ep in vm.Episodes)
+				{
+					if (string.IsNullOrEmpty(firstFolder) && !string.IsNullOrEmpty(ep.VideoPath))
+					{
+						firstFolder = Path.GetDirectoryName(ep.VideoPath);
+					}
+
+					Grid row = new Grid();
+					row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+					row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+					row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+					StackPanel info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+					info.Children.Add(new TextBlock
+					{
+						Text = $"{ep.Title}   •   {ep.DurationText}",
+						Foreground = Brushes.White,
+						FontSize = 13,
+						FontWeight = FontWeights.SemiBold
+					});
+					info.Children.Add(new TextBlock
+					{
+						Text = string.IsNullOrEmpty(ep.VideoPath) ? "Pending..." : Path.GetFileName(ep.VideoPath),
+						Foreground = mutedBrush,
+						FontSize = 11,
+						Margin = new Thickness(0, 2, 0, 0)
+					});
+					row.Children.Add(info);
+
+					Border statusPill = new Border
+					{
+						Background = new SolidColorBrush(ep.TranscriptionStatus == "Error" ? Color.FromRgb(127, 29, 29) : Color.FromRgb(6, 78, 59)),
+						CornerRadius = new CornerRadius(10),
+						Padding = new Thickness(10, 3, 10, 3),
+						Margin = new Thickness(10, 0, 10, 0),
+						VerticalAlignment = VerticalAlignment.Center,
+						Child = new TextBlock
+						{
+							Text = string.IsNullOrEmpty(ep.TranscriptionStatus) ? "Ready" : ep.TranscriptionStatus,
+							Foreground = Brushes.White,
+							FontSize = 11,
+							FontWeight = FontWeights.SemiBold
+						}
+					};
+					Grid.SetColumn(statusPill, 1);
+					row.Children.Add(statusPill);
+
+					Button loadBtn = new Button
+					{
+						Content = "▶ Load & Preview",
+						Padding = new Thickness(12, 6, 12, 6),
+						Background = new SolidColorBrush(Color.FromRgb(2, 132, 199)),
+						Foreground = Brushes.White,
+						BorderThickness = new Thickness(0),
+						FontWeight = FontWeights.SemiBold,
+						Cursor = Cursors.Hand,
+						IsEnabled = !string.IsNullOrEmpty(ep.VideoPath) && File.Exists(ep.VideoPath)
+					};
+					SetControlCornerRadius(loadBtn, 6);
+					EpisodeItem captured = ep;
+					loadBtn.Click += async (s, e) =>
+					{
+						try
+						{
+							dialog.Close();
+							await vm.LoadVideoFileAsync(captured.VideoPath);
+						}
+						catch (Exception ex)
+						{
+							MessageBox.Show($"Could not load episode: {ex.Message}", "Load Episode", MessageBoxButton.OK, MessageBoxImage.Error);
+						}
+					};
+					Grid.SetColumn(loadBtn, 2);
+					row.Children.Add(loadBtn);
+
+					listPanel.Children.Add(new Border
+					{
+						Child = row,
+						Background = idx % 2 == 0 ? cardBrush : bgBrush,
+						BorderBrush = borderBrush,
+						BorderThickness = new Thickness(0, 0, 0, 1),
+						Padding = new Thickness(14, 10, 14, 10)
+					});
+					idx++;
+				}
+			}
+
+			ScrollViewer scroll = new ScrollViewer
+			{
+				Content = listPanel,
+				VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+				Background = bgBrush,
+				BorderBrush = borderBrush,
+				BorderThickness = new Thickness(1)
+			};
+
+			Grid footer = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+			footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+			footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+			footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+			Button openFolderBtn = new Button
+			{
+				Content = "📁 Open Episodes Folder",
+				Padding = new Thickness(14, 8, 14, 8),
+				Background = cardBrush,
+				Foreground = accentBrush,
+				BorderBrush = borderBrush,
+				BorderThickness = new Thickness(1),
+				Cursor = Cursors.Hand,
+				IsEnabled = !string.IsNullOrEmpty(firstFolder) && Directory.Exists(firstFolder)
+			};
+			SetControlCornerRadius(openFolderBtn, 8);
+			openFolderBtn.Click += (s, e) =>
+			{
+				try { Process.Start(new ProcessStartInfo { FileName = firstFolder, UseShellExecute = true }); } catch { }
+			};
+			footer.Children.Add(openFolderBtn);
+
+			Button closeBtn = new Button
+			{
+				Content = "Close",
+				Padding = new Thickness(18, 8, 18, 8),
+				Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+				Foreground = Brushes.White,
+				BorderBrush = borderBrush,
+				BorderThickness = new Thickness(1),
+				Cursor = Cursors.Hand
+			};
+			SetControlCornerRadius(closeBtn, 8);
+			closeBtn.Click += (s, e) => dialog.Close();
+			Grid.SetColumn(closeBtn, 2);
+			footer.Children.Add(closeBtn);
+
+			Grid root = new Grid { Margin = new Thickness(20) };
+			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+			root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+			Grid.SetRow(header, 0); root.Children.Add(header);
+			Grid.SetRow(scroll, 1); root.Children.Add(scroll);
+			Grid.SetRow(footer, 2); root.Children.Add(footer);
+
+			dialog.Content = new Border
+			{
+				Child = root,
+				Background = bgBrush,
+				BorderBrush = accentBrush,
+				BorderThickness = new Thickness(1),
+				CornerRadius = new CornerRadius(10)
+			};
+			dialog.ShowDialog();
+		}
+		catch (Exception ex)
+		{
+			Log("ShowSplitEpisodesListDialog error: " + ex);
 		}
 	}
 
