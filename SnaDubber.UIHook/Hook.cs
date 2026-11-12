@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.0.6";
+			window.Title = "SNA-Dubber Version 2.0.7";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -2303,10 +2303,13 @@ public static class Hook
 
 			hostPanel.Children.Add(button);
 
+			Func<int> countRealEpisodes = () =>
+				vm.Episodes?.Count(ep => !string.IsNullOrEmpty(ep.VideoPath) || ep.TranscriptionStatus == "Splitting" || ep.TranscriptionStatus == "Ready" || ep.TranscriptionStatus == "Error") ?? 0;
+
 			Button episodesListBtn = new Button
 			{
 				Tag = "EpisodesListButton",
-				Content = vm.Episodes.Count > 0 ? $"📋 Episodes ({vm.Episodes.Count})" : "📋 Episodes",
+				Content = countRealEpisodes() > 0 ? $"📋 Episodes ({countRealEpisodes()})" : "📋 Episodes",
 				ToolTip = "View split episodes list and load any episode to preview or translate",
 				Height = 32.0,
 				MinWidth = 115.0,
@@ -2334,7 +2337,8 @@ public static class Hook
 					{
 						window.Dispatcher.Invoke(() =>
 						{
-							episodesListBtn.Content = vm.Episodes.Count > 0 ? $"📋 Episodes ({vm.Episodes.Count})" : "📋 Episodes";
+							int realCount = countRealEpisodes();
+							episodesListBtn.Content = realCount > 0 ? $"📋 Episodes ({realCount})" : "📋 Episodes";
 						});
 					}
 					catch { }
@@ -2581,7 +2585,7 @@ public static class Hook
 			try { File.Delete(markerPath); } catch { }
 
 			using var doc = System.Text.Json.JsonDocument.Parse(json);
-			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.6") : "2.0.6";
+			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.7") : "2.0.7";
 			string notes = doc.RootElement.TryGetProperty("release_notes", out var nEl) ? (nEl.GetString() ?? "") : "";
 
 			window.Dispatcher.BeginInvoke((Action)(() =>
@@ -2680,7 +2684,7 @@ public static class Hook
 			Grid.SetRow(headerGrid, 0);
 			root.Children.Add(headerGrid);
 
-			// Row 1: Compact Version Bar (Current: v2.0.6 -> Latest: v2.0.6   [Up to Date ✓])
+			// Row 1: Compact Version Bar (Current: v2.0.7 -> Latest: v2.0.7   [Up to Date ✓])
 			Border infoCard = new Border
 			{
 				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
@@ -2696,10 +2700,10 @@ public static class Hook
 
 			StackPanel verRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(new TextBlock { Text = "Current: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtCurVer = new TextBlock { Text = "v2.0.6", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtCurVer = new TextBlock { Text = "v2.0.7", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtCurVer);
 			verRow.Children.Add(new TextBlock { Text = "  →  Latest: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.6", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.7", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtLatestVer);
 			infoGrid.Children.Add(verRow);
 
@@ -2904,7 +2908,7 @@ public static class Hook
 
 			TextBlock txtNotesHeader = new TextBlock
 			{
-				Text = "📦 ព័ត៌មាន Update (v2.0.6):",
+				Text = "📦 ព័ត៌មាន Update (v2.0.7):",
 				FontSize = 13,
 				FontWeight = FontWeights.Bold,
 				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
@@ -2934,7 +2938,7 @@ public static class Hook
 			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 			TextBlock txtNotes = new TextBlock
 			{
-				Text = "កំណែថ្មី Version 2.0.6 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
+				Text = "កំណែថ្មី Version 2.0.7 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
 				FontSize = 12.5,
 				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
 				TextWrapping = TextWrapping.Wrap,
@@ -2951,7 +2955,7 @@ public static class Hook
 			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = "2.0.6";
+			string currentVer = "2.0.7";
 			string latestVer = currentVer;
 			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
@@ -3005,7 +3009,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.6");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.7");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3029,7 +3033,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.6");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.7");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -3133,14 +3137,14 @@ public static class Hook
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
 						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.6.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.6.exe")
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.7.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.7.exe")
 					};
 
 					try
 					{
 						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.6");
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.7");
 
 						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 						if (resp.IsSuccessStatusCode)
@@ -3528,10 +3532,35 @@ del ""%~f0""
 				FontFamily = new FontFamily("Segoe UI, Khmer OS Battambang")
 			};
 
+			var realEpisodes = vm.Episodes?
+				.Where(ep => !string.IsNullOrEmpty(ep.VideoPath) || ep.TranscriptionStatus == "Splitting" || ep.TranscriptionStatus == "Ready" || ep.TranscriptionStatus == "Error")
+				.ToList() ?? new List<EpisodeItem>();
+
+			Action<Button, double> applyDarkBtn = (btn, radius) =>
+			{
+				var bd = new FrameworkElementFactory(typeof(Border), "bd");
+				bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(radius));
+				bd.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Background") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+				bd.SetBinding(Border.BorderBrushProperty, new System.Windows.Data.Binding("BorderBrush") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+				bd.SetBinding(Border.BorderThicknessProperty, new System.Windows.Data.Binding("BorderThickness") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+				bd.SetBinding(Border.PaddingProperty, new System.Windows.Data.Binding("Padding") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+				var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+				cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+				cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+				bd.AppendChild(cp);
+				var tpl = new ControlTemplate(typeof(Button)) { VisualTree = bd };
+				var dis = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+				dis.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(22, 31, 48)), "bd"));
+				dis.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(51, 65, 85)), "bd"));
+				dis.Setters.Add(new Setter(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(100, 116, 139))));
+				tpl.Triggers.Add(dis);
+				btn.Template = tpl;
+			};
+
 			StackPanel header = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
 			header.Children.Add(new TextBlock
 			{
-				Text = $"📋 Split Episodes List ({vm.Episodes?.Count ?? 0})",
+				Text = $"📋 Split Episodes List ({realEpisodes.Count})",
 				Foreground = accentBrush,
 				FontSize = 19,
 				FontWeight = FontWeights.Bold
@@ -3547,7 +3576,7 @@ del ""%~f0""
 			StackPanel listPanel = new StackPanel();
 			string firstFolder = folderOverride;
 
-			if (vm.Episodes == null || vm.Episodes.Count == 0)
+			if (realEpisodes.Count == 0)
 			{
 				listPanel.Children.Add(new TextBlock
 				{
@@ -3561,7 +3590,7 @@ del ""%~f0""
 			else
 			{
 				int idx = 0;
-				foreach (EpisodeItem ep in vm.Episodes)
+				foreach (EpisodeItem ep in realEpisodes)
 				{
 					if (string.IsNullOrEmpty(firstFolder) && !string.IsNullOrEmpty(ep.VideoPath))
 					{
@@ -3619,7 +3648,7 @@ del ""%~f0""
 						Cursor = Cursors.Hand,
 						IsEnabled = !string.IsNullOrEmpty(ep.VideoPath) && File.Exists(ep.VideoPath)
 					};
-					SetControlCornerRadius(loadBtn, 6);
+					applyDarkBtn(loadBtn, 6);
 					EpisodeItem captured = ep;
 					loadBtn.Click += async (s, e) =>
 					{
@@ -3673,7 +3702,7 @@ del ""%~f0""
 				Cursor = Cursors.Hand,
 				IsEnabled = !string.IsNullOrEmpty(firstFolder) && Directory.Exists(firstFolder)
 			};
-			SetControlCornerRadius(openFolderBtn, 8);
+			applyDarkBtn(openFolderBtn, 8);
 			openFolderBtn.Click += (s, e) =>
 			{
 				try { Process.Start(new ProcessStartInfo { FileName = firstFolder, UseShellExecute = true }); } catch { }
@@ -3690,7 +3719,7 @@ del ""%~f0""
 				BorderThickness = new Thickness(1),
 				Cursor = Cursors.Hand
 			};
-			SetControlCornerRadius(closeBtn, 8);
+			applyDarkBtn(closeBtn, 8);
 			closeBtn.Click += (s, e) => dialog.Close();
 			Grid.SetColumn(closeBtn, 2);
 			footer.Children.Add(closeBtn);

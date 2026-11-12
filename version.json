@@ -1,9 +1,9 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.0.6",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.6/ToolDubber-Setup-v2.0.6.exe",
-  "release_notes": "កំណែថ្មី Version 2.0.6 រួមមាន:\n1. បន្ថែមប៊ូតុង 📋 Episodes នៅជាប់ Split Videos ដើម្បីមើលបញ្ជីភាគដែលបានបំបែករួច ចុច Load & Preview ភាគណាមួយ ឬបើក Folder ភាគទាំងអស់\n2. Split Videos រហ័សទាន់ចិត្ត៖ បំបែកវីដេអូជាភាគៗ (Parallel Stream-Copy) ដោយមិនទាន់ Translate ស្វ័យប្រវត្តិទេ — ចុចប៊ូតុង Translate នៅពេលអ្នកចង់បកប្រែ\n3. Auto-Update Center រចនាថ្មីស្អាត ដំឡើង Update ស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីឡើងវិញភ្លាមៗ\n4. ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor ដូចដើម)",
-  "sha256": "f6846e87b6099af28ccfbc511a4d4ac784e454bfb6bcc857375e9eb37e117eb8",
+  "latest_version": "2.0.7",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.7/ToolDubber-Setup-v2.0.7.exe",
+  "release_notes": "កំណែថ្មី Version 2.0.7 រួមមាន:\n1. កែសម្រួលបញ្ជី 📋 Episodes ឱ្យបង្ហាញតែភាគវីដេអូពិតប្រាកដដែលអ្នកបាន Split (លុបចេញ 86 ភាគគំរូដើម) និងកែពណ៌ប៊ូតុង Disabled ឱ្យងាយមើល\n2. Split Videos រហ័សទាន់ចិត្ត៖ បំបែកវីដេអូជាភាគៗ (Parallel Stream-Copy) ដោយមិនទាន់ Translate ស្វ័យប្រវត្តិទេ — ចុចប៊ូតុង Translate នៅពេលអ្នកចង់បកប្រែ\n3. Auto-Update Center រចនាថ្មីស្អាត ដំឡើង Update ស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីឡើងវិញភ្លាមៗ\n4. ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor ដូចដើម)",
+  "sha256": "e828303e474cce3af6612c24c2b708673b7f79755cec346ccddf9d1bda1526c2",
   "mandatory": false
 }
