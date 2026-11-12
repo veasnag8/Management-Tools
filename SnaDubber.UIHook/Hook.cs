@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.0.1";
+			window.Title = "SNA-Dubber Version 2.0.4";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -336,6 +336,7 @@ public static class Hook
 			{
 				ScheduleInjections(window);
 				ApplyModernStudioRedesign(window);
+				CheckPostUpdateSplash(window);
 			};
 			window.DataContextChanged += (object s, DependencyPropertyChangedEventArgs e) =>
 			{
@@ -2518,7 +2519,44 @@ public static class Hook
 		}
 	}
 
-	private static void ShowAutoUpdateCenterDialog(Window owner, MainViewModel vm)
+	private static bool _postUpdateChecked = false;
+
+	private static string GetPostUpdateMarkerPath()
+	{
+		string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ToolDubber");
+		Directory.CreateDirectory(dir);
+		return Path.Combine(dir, "just_updated.json");
+	}
+
+	private static void CheckPostUpdateSplash(Window window)
+	{
+		if (_postUpdateChecked || window == null) return;
+		_postUpdateChecked = true;
+		try
+		{
+			string markerPath = GetPostUpdateMarkerPath();
+			if (!File.Exists(markerPath)) return;
+
+			string json = File.ReadAllText(markerPath, Encoding.UTF8);
+			try { File.Delete(markerPath); } catch { }
+
+			using var doc = System.Text.Json.JsonDocument.Parse(json);
+			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.4") : "2.0.4";
+			string notes = doc.RootElement.TryGetProperty("release_notes", out var nEl) ? (nEl.GetString() ?? "") : "";
+
+			window.Dispatcher.BeginInvoke((Action)(() =>
+			{
+				var vm = window.DataContext as MainViewModel;
+				ShowAutoUpdateCenterDialog(window, vm, ver, notes);
+			}), DispatcherPriority.ApplicationIdle);
+		}
+		catch (Exception ex)
+		{
+			Log("CheckPostUpdateSplash error: " + ex.Message);
+		}
+	}
+
+	private static void ShowAutoUpdateCenterDialog(Window owner, MainViewModel vm, string postUpdateVersion = null, string postUpdateNotes = null)
 	{
 		try
 		{
@@ -2527,260 +2565,324 @@ public static class Hook
 				Title = "Auto Update Center - Tool Dubber",
 				Owner = owner,
 				WindowStartupLocation = WindowStartupLocation.CenterOwner,
-				Width = 590,
-				Height = 540,
+				Width = 610,
+				Height = 500,
 				ResizeMode = ResizeMode.NoResize,
+				WindowStyle = WindowStyle.None,
+				AllowsTransparency = true,
+				Background = Brushes.Transparent,
 				ShowInTaskbar = false,
-				Background = new SolidColorBrush(Color.FromRgb(11, 17, 32)),
-				FontFamily = new FontFamily("Segoe UI")
+				FontFamily = new FontFamily("Segoe UI, Khmer OS Battambang")
 			};
 
-			Grid root = new Grid { Margin = new Thickness(24) };
-			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-			root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+			Border outerFrame = new Border
+			{
+				Background = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
+				CornerRadius = new CornerRadius(16),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+				BorderThickness = new Thickness(1),
+				Padding = new Thickness(22),
+				Effect = new System.Windows.Media.Effects.DropShadowEffect
+				{
+					Color = Colors.Black,
+					BlurRadius = 24,
+					ShadowDepth = 4,
+					Opacity = 0.55
+				}
+			};
+			outerFrame.MouseLeftButtonDown += (s, e) =>
+			{
+				if (e.LeftButton == MouseButtonState.Pressed)
+				{
+					try { dialog.DragMove(); } catch { }
+				}
+			};
+
+			Grid root = new Grid();
+			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: Header
+			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 1: Version Bar
+			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: Progress Track
+			root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 3: Action Buttons
+			root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 4: Release Notes
 
 			// Row 0: Header
-			Grid headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 16) };
+			Grid headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 14) };
 			headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 			headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-			StackPanel headerTitles = new StackPanel();
-			headerTitles.Children.Add(new TextBlock
+			TextBlock txtTitle = new TextBlock
 			{
-				Text = "Auto Update Center",
-				FontSize = 20,
+				Text = "🚀 Tool Dubber Auto-Update Center",
+				FontSize = 19,
 				FontWeight = FontWeights.Bold,
-				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248))
-			});
-			headerTitles.Children.Add(new TextBlock
+				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			headerGrid.Children.Add(txtTitle);
+
+			Button btnClose = new Button
 			{
-				Text = "Tool Dubber — Keep your AI video dubbing suite up to date",
-				FontSize = 12,
+				Content = "✕",
+				Width = 30,
+				Height = 30,
+				FontSize = 13,
+				FontWeight = FontWeights.Bold,
+				Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
 				Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
-				Margin = new Thickness(0, 2, 0, 0)
-			});
-			headerGrid.Children.Add(headerTitles);
+				BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+				BorderThickness = new Thickness(1),
+				Cursor = Cursors.Hand,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			SetControlCornerRadius(btnClose, 15);
+			Grid.SetColumn(btnClose, 1);
+			headerGrid.Children.Add(btnClose);
+			Grid.SetRow(headerGrid, 0);
+			root.Children.Add(headerGrid);
+
+			// Row 1: Compact Version Bar (Current: v2.0.4 -> Latest: v2.0.4   [Up to Date ✓])
+			Border infoCard = new Border
+			{
+				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
+				CornerRadius = new CornerRadius(10),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+				BorderThickness = new Thickness(1),
+				Padding = new Thickness(14, 10, 14, 10),
+				Margin = new Thickness(0, 0, 0, 12)
+			};
+			Grid infoGrid = new Grid();
+			infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+			infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+			StackPanel verRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+			verRow.Children.Add(new TextBlock { Text = "Current: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), VerticalAlignment = VerticalAlignment.Center });
+			TextBlock txtCurVer = new TextBlock { Text = "v2.0.4", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+			verRow.Children.Add(txtCurVer);
+			verRow.Children.Add(new TextBlock { Text = "  →  Latest: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), VerticalAlignment = VerticalAlignment.Center });
+			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.4", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
+			verRow.Children.Add(txtLatestVer);
+			infoGrid.Children.Add(verRow);
 
 			Border statusBadge = new Border
 			{
-				Background = new SolidColorBrush(Color.FromRgb(3, 105, 161)),
+				Background = new SolidColorBrush(Color.FromRgb(6, 78, 59)),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129)),
+				BorderThickness = new Thickness(1),
 				CornerRadius = new CornerRadius(12),
-				Padding = new Thickness(10, 4, 10, 4),
+				Padding = new Thickness(12, 4, 12, 4),
 				VerticalAlignment = VerticalAlignment.Center
 			};
 			TextBlock statusBadgeText = new TextBlock
 			{
-				Text = "Update Center",
-				FontSize = 11,
+				Text = "Checking...",
+				FontSize = 12,
 				FontWeight = FontWeights.Bold,
-				Foreground = Brushes.White
+				Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 208))
 			};
 			statusBadge.Child = statusBadgeText;
 			Grid.SetColumn(statusBadge, 1);
-			headerGrid.Children.Add(statusBadge);
-			Grid.SetRow(headerGrid, 0);
-			root.Children.Add(headerGrid);
-
-			// Row 1: Version card
-			Border infoCard = new Border
-			{
-				Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
-				CornerRadius = new CornerRadius(10),
-				BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
-				BorderThickness = new Thickness(1),
-				Padding = new Thickness(14),
-				Margin = new Thickness(0, 0, 0, 14)
-			};
-			Grid infoGrid = new Grid();
-			infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-			infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-			infoGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-			StackPanel curVerCol = new StackPanel();
-			curVerCol.Children.Add(new TextBlock { Text = "CURRENT VERSION", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)) });
-			TextBlock txtCurVer = new TextBlock { Text = "2.0.3", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
-			curVerCol.Children.Add(txtCurVer);
-			infoGrid.Children.Add(curVerCol);
-
-			StackPanel latVerCol = new StackPanel();
-			latVerCol.Children.Add(new TextBlock { Text = "LATEST VERSION", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)) });
-			TextBlock txtLatestVer = new TextBlock { Text = "--", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), Margin = new Thickness(0, 2, 0, 0) };
-			latVerCol.Children.Add(txtLatestVer);
-			Grid.SetColumn(latVerCol, 1);
-			infoGrid.Children.Add(latVerCol);
-
-			StackPanel lastCheckCol = new StackPanel();
-			lastCheckCol.Children.Add(new TextBlock { Text = "LAST CHECKED", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)) });
-			TextBlock txtLastCheck = new TextBlock { Text = DateTime.Now.ToString("g"), FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), Margin = new Thickness(0, 3, 0, 0) };
-			lastCheckCol.Children.Add(txtLastCheck);
-			Grid.SetColumn(lastCheckCol, 2);
-			infoGrid.Children.Add(lastCheckCol);
-
+			infoGrid.Children.Add(statusBadge);
 			infoCard.Child = infoGrid;
 			Grid.SetRow(infoCard, 1);
 			root.Children.Add(infoCard);
 
-			// Row 2: Release notes
-			Grid notesGrid = new Grid { Margin = new Thickness(0, 0, 0, 14) };
-			notesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-			notesGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-			notesGrid.Children.Add(new TextBlock
+			// Row 2: Gradient Progress Bar + Status Text
+			StackPanel progressPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
+			Border progressTrack = new Border
 			{
-				Text = "Release Notes",
-				FontSize = 13,
-				FontWeight = FontWeights.SemiBold,
-				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-				Margin = new Thickness(0, 0, 0, 6)
-			});
-
-			Border notesCard = new Border
-			{
-				Background = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-				CornerRadius = new CornerRadius(8),
-				Padding = new Thickness(12),
-				BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
-				BorderThickness = new Thickness(1)
-			};
-			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-			TextBlock txtNotes = new TextBlock
-			{
-				Text = "Click 'Check for Updates' to search for newer releases.",
-				FontSize = 12,
-				Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
-				TextWrapping = TextWrapping.Wrap,
-				LineHeight = 18
-			};
-			svNotes.Content = txtNotes;
-			notesCard.Child = svNotes;
-			Grid.SetRow(notesCard, 1);
-			notesGrid.Children.Add(notesCard);
-			Grid.SetRow(notesGrid, 2);
-			root.Children.Add(notesGrid);
-
-			// Row 3: Download & Verification Progress Card
-			Border progressCard = new Border
-			{
-				Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
-				CornerRadius = new CornerRadius(8),
-				BorderBrush = new SolidColorBrush(Color.FromRgb(2, 132, 199)),
+				Height = 22,
+				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
+				CornerRadius = new CornerRadius(11),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
 				BorderThickness = new Thickness(1),
-				Padding = new Thickness(12),
-				Margin = new Thickness(0, 0, 0, 14),
-				Visibility = Visibility.Collapsed
+				ClipToBounds = true
 			};
-			StackPanel progressPanel = new StackPanel();
-			Grid progHeader = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-			progHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-			progHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-			TextBlock txtStatus = new TextBlock
+			Grid progOverlay = new Grid();
+			Border progressFill = new Border
 			{
-				Text = "Downloading update...",
-				FontSize = 12,
-				FontWeight = FontWeights.SemiBold,
-				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248))
+				HorizontalAlignment = HorizontalAlignment.Left,
+				Width = 0,
+				CornerRadius = new CornerRadius(10),
+				Background = new LinearGradientBrush(
+					Color.FromRgb(16, 185, 129),
+					Color.FromRgb(59, 130, 246),
+					0.0)
 			};
+			TextBlock txtPct = new TextBlock
+			{
+				Text = "0%",
+				FontSize = 11,
+				FontWeight = FontWeights.Bold,
+				Foreground = Brushes.White,
+				HorizontalAlignment = HorizontalAlignment.Center,
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			progOverlay.Children.Add(progressFill);
+			progOverlay.Children.Add(txtPct);
+			progressTrack.Child = progOverlay;
+			progressPanel.Children.Add(progressTrack);
+
+			Action<double> setProgressPct = (pct) =>
+			{
+				double clamped = Math.Max(0, Math.Min(100, pct));
+				double trackW = progressTrack.ActualWidth > 10 ? progressTrack.ActualWidth - 2 : 562;
+				progressFill.Width = Math.Round(trackW * (clamped / 100.0), 1);
+				txtPct.Text = $"{(int)Math.Round(clamped)}%";
+			};
+
+			// Keep hidden ProgressBar stub for indeterminate state compatibility
+			ProgressBar progressBar = new ProgressBar { Height = 0, Visibility = Visibility.Collapsed, Minimum = 0, Maximum = 100, Value = 0 };
+			Border progressCard = new Border { Visibility = Visibility.Visible };
+			TextBlock txtStatus = new TextBlock { Text = "", Visibility = Visibility.Collapsed };
+
 			TextBlock txtStats = new TextBlock
 			{
-				Text = "0 MB / 0 MB (0 MB/s)",
-				FontSize = 11,
-				Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184))
+				Text = "Checking for updates...",
+				FontSize = 12,
+				Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+				Margin = new Thickness(2, 6, 0, 0)
 			};
-			progHeader.Children.Add(txtStatus);
-			Grid.SetColumn(txtStats, 1);
-			progHeader.Children.Add(txtStats);
-			progressPanel.Children.Add(progHeader);
+			progressPanel.Children.Add(txtStats);
+			Grid.SetRow(progressPanel, 2);
+			root.Children.Add(progressPanel);
 
-			ProgressBar progressBar = new ProgressBar
+			// Row 3: Action Buttons
+			StackPanel actionRow = new StackPanel
 			{
-				Height = 8,
-				Background = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-				Foreground = new SolidColorBrush(Color.FromRgb(2, 132, 199)),
-				BorderThickness = new Thickness(0),
-				Minimum = 0,
-				Maximum = 100,
-				Value = 0
+				Orientation = Orientation.Horizontal,
+				HorizontalAlignment = HorizontalAlignment.Center,
+				Margin = new Thickness(0, 0, 0, 14)
 			};
-			progressPanel.Children.Add(progressBar);
-			progressCard.Child = progressPanel;
-			Grid.SetRow(progressCard, 3);
-			root.Children.Add(progressCard);
-
-			// Row 4: Action Buttons
-			Grid actionGrid = new Grid();
-			actionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-			actionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-			actionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-			actionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-			actionGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
 			Button btnCheck = new Button
 			{
-				Content = "🔄 Check for Updates",
-				Padding = new Thickness(16, 9, 16, 9),
+				Content = "🔍 Check for Updates",
+				Padding = new Thickness(16, 8, 16, 8),
 				Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
-				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
-				BorderBrush = new SolidColorBrush(Color.FromRgb(2, 132, 199)),
+				Foreground = Brushes.White,
+				BorderBrush = new SolidColorBrush(Color.FromRgb(71, 85, 105)),
 				BorderThickness = new Thickness(1),
+				FontWeight = FontWeights.SemiBold,
+				Margin = new Thickness(0, 0, 10, 0),
 				Cursor = Cursors.Hand
 			};
 			SetControlCornerRadius(btnCheck, 8);
-			Grid.SetColumn(btnCheck, 0);
-			actionGrid.Children.Add(btnCheck);
+			actionRow.Children.Add(btnCheck);
 
 			Button btnRetry = new Button
 			{
-				Content = "Retry Download",
-				Padding = new Thickness(16, 9, 16, 9),
+				Content = "Retry",
+				Padding = new Thickness(14, 8, 14, 8),
 				Background = new SolidColorBrush(Color.FromRgb(185, 28, 28)),
 				Foreground = Brushes.White,
-				Margin = new Thickness(0, 0, 8, 0),
+				Margin = new Thickness(0, 0, 10, 0),
 				Cursor = Cursors.Hand,
 				Visibility = Visibility.Collapsed
 			};
 			SetControlCornerRadius(btnRetry, 8);
-			Grid.SetColumn(btnRetry, 2);
-			actionGrid.Children.Add(btnRetry);
+			actionRow.Children.Add(btnRetry);
+
+			Button btnUpdate = new Button
+			{
+				Content = "⬇ Download Update Now",
+				Padding = new Thickness(16, 8, 16, 8),
+				Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+				Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+				BorderThickness = new Thickness(1),
+				FontWeight = FontWeights.Bold,
+				IsEnabled = false,
+				Margin = new Thickness(0, 0, 10, 0),
+				Cursor = Cursors.Hand
+			};
+			SetControlCornerRadius(btnUpdate, 8);
+			actionRow.Children.Add(btnUpdate);
 
 			Button btnLater = new Button
 			{
 				Content = "Later",
-				Padding = new Thickness(16, 9, 16, 9),
-				Background = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
-				Foreground = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
-				Margin = new Thickness(0, 0, 8, 0),
+				Padding = new Thickness(16, 8, 16, 8),
+				Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(71, 85, 105)),
+				BorderThickness = new Thickness(1),
 				Cursor = Cursors.Hand
 			};
 			SetControlCornerRadius(btnLater, 8);
-			Grid.SetColumn(btnLater, 3);
-			actionGrid.Children.Add(btnLater);
+			actionRow.Children.Add(btnLater);
 
-			Button btnUpdate = new Button
+			Grid.SetRow(actionRow, 3);
+			root.Children.Add(actionRow);
+
+			// Row 4: Release Notes Card
+			Border notesCard = new Border
 			{
-				Content = "Update Now",
-				Padding = new Thickness(18, 9, 18, 9),
-				Background = new SolidColorBrush(Color.FromRgb(2, 132, 199)),
-				Foreground = Brushes.White,
-				FontWeight = FontWeights.Bold,
-				IsEnabled = false,
-				Cursor = Cursors.Hand
+				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
+				CornerRadius = new CornerRadius(10),
+				Padding = new Thickness(14),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+				BorderThickness = new Thickness(1)
 			};
-			SetControlCornerRadius(btnUpdate, 8);
-			Grid.SetColumn(btnUpdate, 4);
-			actionGrid.Children.Add(btnUpdate);
+			Grid notesLayout = new Grid();
+			notesLayout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+			notesLayout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-			Grid.SetRow(actionGrid, 4);
-			root.Children.Add(actionGrid);
+			Grid notesHeader = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+			notesHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+			notesHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-			dialog.Content = root;
+			TextBlock txtNotesHeader = new TextBlock
+			{
+				Text = "📦 ព័ត៌មាន Update (v2.0.4):",
+				FontSize = 13,
+				FontWeight = FontWeights.Bold,
+				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+				VerticalAlignment = VerticalAlignment.Center
+			};
+			notesHeader.Children.Add(txtNotesHeader);
+
+			Border notesPill = new Border
+			{
+				Background = new SolidColorBrush(Color.FromRgb(6, 78, 59)),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129)),
+				BorderThickness = new Thickness(1),
+				CornerRadius = new CornerRadius(10),
+				Padding = new Thickness(10, 3, 10, 3)
+			};
+			notesPill.Child = new TextBlock
+			{
+				Text = "🎯 Tool Dubber Pro",
+				FontSize = 11,
+				FontWeight = FontWeights.Bold,
+				Foreground = new SolidColorBrush(Color.FromRgb(167, 243, 208))
+			};
+			Grid.SetColumn(notesPill, 1);
+			notesHeader.Children.Add(notesPill);
+			notesLayout.Children.Add(notesHeader);
+
+			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+			TextBlock txtNotes = new TextBlock
+			{
+				Text = "កំណែថ្មី Version 2.0.4 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
+				FontSize = 12.5,
+				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+				TextWrapping = TextWrapping.Wrap,
+				LineHeight = 20
+			};
+			svNotes.Content = txtNotes;
+			Grid.SetRow(svNotes, 1);
+			notesLayout.Children.Add(svNotes);
+			notesCard.Child = notesLayout;
+			Grid.SetRow(notesCard, 4);
+			root.Children.Add(notesCard);
+
+			outerFrame.Child = root;
+			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = "2.0.3";
+			string currentVer = "2.0.4";
 			string latestVer = currentVer;
+			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
 			string sha256Expected = "";
 			bool isMandatory = false;
@@ -2790,6 +2892,23 @@ public static class Hook
 			{
 				statusBadgeText.Text = text;
 				try { statusBadge.Background = (Brush)new BrushConverter().ConvertFromString(bgHex); } catch { }
+			};
+
+			Action<bool> setUpdateBtnReady = (ready) =>
+			{
+				btnUpdate.IsEnabled = ready;
+				if (ready)
+				{
+					btnUpdate.Background = new SolidColorBrush(Color.FromRgb(2, 132, 199));
+					btnUpdate.Foreground = Brushes.White;
+					btnUpdate.BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+				}
+				else
+				{
+					btnUpdate.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
+					btnUpdate.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+					btnUpdate.BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85));
+				}
 			};
 
 			Func<Task> checkUpdatesAsync = async () =>
@@ -2815,7 +2934,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.3");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.4");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -2839,7 +2958,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.3");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.4");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -2869,42 +2988,42 @@ public static class Hook
 							hasUpdate = true;
 							latestVer = latestVersionFound;
 							downloadUrl = downloadUrlFound ?? "";
-							txtNotes.Text = releaseNotesFound ?? "Performance improvements and bug fixes.";
+							latestNotesText = !string.IsNullOrWhiteSpace(releaseNotesFound)
+								? releaseNotesFound
+								: "Performance improvements and bug fixes.";
+							txtNotes.Text = latestNotesText;
+							txtNotesHeader.Text = $"📦 ព័ត៌មាន Update (v{latestVer}):";
 							sha256Expected = sha256Found ?? "";
 							isMandatory = mandatoryFound;
 						}
 					}
 
-					txtLatestVer.Text = hasUpdate ? latestVer : currentVer;
-					txtLastCheck.Text = DateTime.Now.ToString("g");
+					txtLatestVer.Text = $"v{(hasUpdate ? latestVer : currentVer)}";
 					progressBar.IsIndeterminate = false;
 
 					if (hasUpdate)
 					{
-						setBadge(isMandatory ? "Mandatory Update" : "Update Available", isMandatory ? "#DC2626" : "#0284C7");
-						txtStatus.Text = "New update available.";
-						txtStats.Text = $"Version {latestVer} is ready for installation.";
-						btnUpdate.IsEnabled = true;
+						setBadge(isMandatory ? "Mandatory Update" : "Update Available", isMandatory ? "#0284C7" : "#0284C7");
+						setProgressPct(0);
+						txtStats.Text = $"Version v{latestVer} is available — click Download Update Now.";
+						setUpdateBtnReady(true);
 						if (isMandatory) btnLater.Visibility = Visibility.Collapsed;
-						progressCard.Visibility = Visibility.Collapsed;
 					}
 					else
 					{
-						setBadge("Up to Date", "#059669");
-						txtStatus.Text = "No updates available.";
-						txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.3).\nAll latest features and enhancements are active.";
-						progressCard.Visibility = Visibility.Collapsed;
-						MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.3).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+						setBadge("Up to Date ✓", "#064E3B");
+						setProgressPct(100);
+						setUpdateBtnReady(false);
+						txtStats.Text = $"Tool Dubber v{currentVer} is up to date.";
 					}
 				}
 				catch (Exception)
 				{
 					progressBar.IsIndeterminate = false;
-					setBadge("Up to Date", "#059669");
-					txtStatus.Text = "No updates available.";
-					txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.3).";
-					progressCard.Visibility = Visibility.Collapsed;
-					MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.3).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+					setBadge("Up to Date ✓", "#064E3B");
+					setProgressPct(100);
+					setUpdateBtnReady(false);
+					txtStats.Text = $"Tool Dubber v{currentVer} is up to date.";
 				}
 				finally
 				{
@@ -2943,14 +3062,14 @@ public static class Hook
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
 						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.3.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.3.exe")
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.4.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.4.exe")
 					};
 
 					try
 					{
 						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.3");
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.4");
 
 						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 						if (resp.IsSuccessStatusCode)
@@ -2980,10 +3099,10 @@ public static class Hook
 									int pct = total > 0 ? (int)((readTotal * 100) / total) : 0;
 
 									progressBar.Value = pct;
-									txtStatus.Text = $"Downloading... {pct}%";
-									double downMB = Math.Round(readTotal / (1024.0 * 1024.0), 1);
-									double totMB = Math.Round(total / (1024.0 * 1024.0), 1);
-									txtStats.Text = $"{downMB} MB / {totMB} MB ({speed:0.0} MB/s)";
+									setProgressPct(pct);
+									double downMB = readTotal / (1024.0 * 1024.0);
+									double totMB = total / (1024.0 * 1024.0);
+									txtStats.Text = $"Downloading... {pct}% ({downMB:0.00} / {totMB:0.00} MB • {speed:0.00} MB/s)";
 
 									lastRead = readTotal;
 									lastT = curT;
@@ -3030,64 +3149,55 @@ public static class Hook
 						}
 					}
 
-					txtStatus.Text = "Ready to install.";
-					txtStats.Text = "Installer verified successfully.";
+					setProgressPct(100);
+					txtStats.Text = "Installer verified. Installing silently & restarting...";
 
-					var confirm = MessageBox.Show(
-						"The new update is verified and ready to install.\n\nPlease save any unsaved work before continuing.\nTool Dubber will close, install the update, and restart automatically.\n\nតើអ្នកចង់ដំឡើងឥឡូវនេះទេ?",
-						"Ready to Install Update",
-						MessageBoxButton.YesNo,
-						MessageBoxImage.Question);
-
-					if (confirm == MessageBoxResult.Yes)
+					try
 					{
-						txtStatus.Text = "Installing update...";
-						txtStats.Text = "Closing Tool Dubber safely...";
-						await Task.Delay(300);
+						string markerPayload = System.Text.Json.JsonSerializer.Serialize(new
+						{
+							version = latestVer,
+							release_notes = latestNotesText
+						});
+						File.WriteAllText(GetPostUpdateMarkerPath(), markerPayload, Encoding.UTF8);
+					}
+					catch { }
 
-						txtStatus.Text = "Restarting Tool Dubber...";
-						string currentExe = Process.GetCurrentProcess().MainModule?.FileName;
-						string runnerBat = Path.Combine(Path.GetTempPath(), $"update_runner_{Guid.NewGuid():N}.bat");
-						string batCode = $@"@echo off
+					await Task.Delay(350);
+
+					string currentExe = Process.GetCurrentProcess().MainModule?.FileName;
+					string runnerBat = Path.Combine(Path.GetTempPath(), $"update_runner_{Guid.NewGuid():N}.bat");
+					string batCode = $@"@echo off
 timeout /t 2 /nobreak >nul
-start """" /wait ""{tempPath}"" /SILENT /CLOSEAPPLICATIONS /NORESTART
+start """" /wait ""{tempPath}"" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS
 timeout /t 1 /nobreak >nul
 start """" ""{currentExe}""
 del ""%~f0""
 ";
-						File.WriteAllText(runnerBat, batCode);
-						Process.Start(new ProcessStartInfo
-						{
-							FileName = runnerBat,
-							UseShellExecute = true,
-							CreateNoWindow = true,
-							WindowStyle = ProcessWindowStyle.Hidden
-						});
-
-						Application.Current.Shutdown();
-					}
-					else
+					File.WriteAllText(runnerBat, batCode);
+					Process.Start(new ProcessStartInfo
 					{
-						txtStatus.Text = "Ready to install.";
-						btnUpdate.IsEnabled = true;
-						btnLater.IsEnabled = true;
-					}
+						FileName = runnerBat,
+						UseShellExecute = true,
+						CreateNoWindow = true,
+						WindowStyle = ProcessWindowStyle.Hidden
+					});
+
+					Application.Current.Shutdown();
 				}
 				catch (OperationCanceledException)
 				{
 					try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
-					txtStatus.Text = "Update failed.";
 					txtStats.Text = "Download cancelled by user.";
 					btnRetry.Visibility = Visibility.Visible;
-					btnUpdate.IsEnabled = true;
+					setUpdateBtnReady(true);
 				}
 				catch (Exception ex)
 				{
 					try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
-					txtStatus.Text = "Update failed.";
-					txtStats.Text = ex.Message;
+					txtStats.Text = $"Update error: {ex.Message}";
 					btnRetry.Visibility = Visibility.Visible;
-					btnUpdate.IsEnabled = true;
+					setUpdateBtnReady(true);
 					MessageBox.Show($"Update error: {ex.Message}", "Update Verification Error", MessageBoxButton.OK, MessageBoxImage.Error);
 				}
 				finally
@@ -3104,9 +3214,35 @@ del ""%~f0""
 				cts?.Cancel();
 				dialog.Close();
 			};
+			btnClose.Click += (s, e) =>
+			{
+				cts?.Cancel();
+				dialog.Close();
+			};
 
-			// Automatically start update check on dialog open
-			dialog.Loaded += async (s, e) => await checkUpdatesAsync();
+			// Automatically show post-update summary or check for updates on dialog open
+			dialog.Loaded += async (s, e) =>
+			{
+				if (!string.IsNullOrEmpty(postUpdateVersion))
+				{
+					txtCurVer.Text = $"v{postUpdateVersion}";
+					txtLatestVer.Text = $"v{postUpdateVersion}";
+					setBadge("Up to Date ✓", "#064E3B");
+					setProgressPct(100);
+					setUpdateBtnReady(false);
+					txtStats.Text = $"Update completed! Tool Dubber v{postUpdateVersion} is now active.";
+					txtNotesHeader.Text = $"📦 ព័ត៌មាន Update (v{postUpdateVersion}):";
+					if (!string.IsNullOrWhiteSpace(postUpdateNotes))
+					{
+						txtNotes.Text = postUpdateNotes;
+					}
+					btnCheck.IsEnabled = true;
+				}
+				else
+				{
+					await checkUpdatesAsync();
+				}
+			};
 			dialog.ShowDialog();
 		}
 		catch (Exception ex)
