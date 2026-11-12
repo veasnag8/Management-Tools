@@ -1,8 +1,8 @@
 ; Script generated for Inno Setup 6
-; Tool Dubber Windows Installer v2.0.7
+; Tool Dubber Windows Installer v2.0.8
 
 #define MyAppName "Tool Dubber"
-#define MyAppVersion "2.0.7"
+#define MyAppVersion "2.0.8"
 #define MyAppPublisher "SNA Studio"
 #define MyAppExeName "SnaDubber.exe"
 #define MyAppSourceDir "D:\Project\Release_v1.2.0\SNA-Dubber"

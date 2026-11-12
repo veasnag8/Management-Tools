@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.0.7";
+			window.Title = "SNA-Dubber Version 2.0.8";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -2344,7 +2344,11 @@ public static class Hook
 					catch { }
 				};
 			}
-			hostPanel.Children.Add(episodesListBtn);
+			int splitIdx = hostPanel.Children.IndexOf(button);
+			if (splitIdx >= 0 && splitIdx + 1 <= hostPanel.Children.Count)
+				hostPanel.Children.Insert(splitIdx + 1, episodesListBtn);
+			else
+				hostPanel.Children.Add(episodesListBtn);
 
 			_isEpisodeBatchHooked = true;
 			Log("Successfully injected Split Videos button into top header bar!");
@@ -2464,7 +2468,9 @@ public static class Hook
 				}
 			};
 
-			int insertIndex = splitBtn != null ? topHost.Children.IndexOf(splitBtn) + 1 : topHost.Children.Count;
+			Button episodesBtn = topHost.Children.OfType<Button>().FirstOrDefault(b => (b.Tag as string) == "EpisodesListButton");
+			Button anchorBtn = episodesBtn ?? splitBtn;
+			int insertIndex = anchorBtn != null ? topHost.Children.IndexOf(anchorBtn) + 1 : topHost.Children.Count;
 			topHost.Children.Insert(Math.Min(topHost.Children.Count, Math.Max(0, insertIndex)), topTranscribe);
 			_isTranscribeTopHooked = true;
 			Log("Successfully placed Transcribe & Translate AI button in top header bar next to Split Videos!");
@@ -2585,7 +2591,7 @@ public static class Hook
 			try { File.Delete(markerPath); } catch { }
 
 			using var doc = System.Text.Json.JsonDocument.Parse(json);
-			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.7") : "2.0.7";
+			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.8") : "2.0.8";
 			string notes = doc.RootElement.TryGetProperty("release_notes", out var nEl) ? (nEl.GetString() ?? "") : "";
 
 			window.Dispatcher.BeginInvoke((Action)(() =>
@@ -2684,7 +2690,7 @@ public static class Hook
 			Grid.SetRow(headerGrid, 0);
 			root.Children.Add(headerGrid);
 
-			// Row 1: Compact Version Bar (Current: v2.0.7 -> Latest: v2.0.7   [Up to Date ✓])
+			// Row 1: Compact Version Bar (Current: v2.0.8 -> Latest: v2.0.8   [Up to Date ✓])
 			Border infoCard = new Border
 			{
 				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
@@ -2700,10 +2706,10 @@ public static class Hook
 
 			StackPanel verRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(new TextBlock { Text = "Current: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtCurVer = new TextBlock { Text = "v2.0.7", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtCurVer = new TextBlock { Text = "v2.0.8", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtCurVer);
 			verRow.Children.Add(new TextBlock { Text = "  →  Latest: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.7", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.8", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtLatestVer);
 			infoGrid.Children.Add(verRow);
 
@@ -2908,7 +2914,7 @@ public static class Hook
 
 			TextBlock txtNotesHeader = new TextBlock
 			{
-				Text = "📦 ព័ត៌មាន Update (v2.0.7):",
+				Text = "📦 ព័ត៌មាន Update (v2.0.8):",
 				FontSize = 13,
 				FontWeight = FontWeights.Bold,
 				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
@@ -2938,7 +2944,7 @@ public static class Hook
 			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 			TextBlock txtNotes = new TextBlock
 			{
-				Text = "កំណែថ្មី Version 2.0.7 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
+				Text = "កំណែថ្មី Version 2.0.8 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
 				FontSize = 12.5,
 				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
 				TextWrapping = TextWrapping.Wrap,
@@ -2955,7 +2961,7 @@ public static class Hook
 			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = "2.0.7";
+			string currentVer = "2.0.8";
 			string latestVer = currentVer;
 			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
@@ -3009,7 +3015,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.7");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.8");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3033,7 +3039,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.7");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.8");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -3137,14 +3143,14 @@ public static class Hook
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
 						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.7.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.7.exe")
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.8.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.8.exe")
 					};
 
 					try
 					{
 						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.7");
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.8");
 
 						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 						if (resp.IsSuccessStatusCode)
