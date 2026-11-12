@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.0.9";
+			window.Title = "SNA-Dubber Version 2.1.0";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -2607,7 +2607,7 @@ public static class Hook
 			try { File.Delete(markerPath); } catch { }
 
 			using var doc = System.Text.Json.JsonDocument.Parse(json);
-			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.9") : "2.0.9";
+			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.1.0") : "2.1.0";
 			string notes = doc.RootElement.TryGetProperty("release_notes", out var nEl) ? (nEl.GetString() ?? "") : "";
 
 			window.Dispatcher.BeginInvoke((Action)(() =>
@@ -2706,7 +2706,7 @@ public static class Hook
 			Grid.SetRow(headerGrid, 0);
 			root.Children.Add(headerGrid);
 
-			// Row 1: Compact Version Bar (Current: v2.0.9 -> Latest: v2.0.9   [Up to Date ✓])
+			// Row 1: Compact Version Bar (Current: v2.1.0 -> Latest: v2.1.0   [Up to Date ✓])
 			Border infoCard = new Border
 			{
 				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
@@ -2722,10 +2722,10 @@ public static class Hook
 
 			StackPanel verRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(new TextBlock { Text = "Current: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtCurVer = new TextBlock { Text = "v2.0.9", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtCurVer = new TextBlock { Text = "v2.1.0", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtCurVer);
 			verRow.Children.Add(new TextBlock { Text = "  →  Latest: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.9", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtLatestVer = new TextBlock { Text = "v2.1.0", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtLatestVer);
 			infoGrid.Children.Add(verRow);
 
@@ -2930,7 +2930,7 @@ public static class Hook
 
 			TextBlock txtNotesHeader = new TextBlock
 			{
-				Text = "📦 ព័ត៌មាន Update (v2.0.9):",
+				Text = "📦 ព័ត៌មាន Update (v2.1.0):",
 				FontSize = 13,
 				FontWeight = FontWeights.Bold,
 				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
@@ -2960,7 +2960,7 @@ public static class Hook
 			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 			TextBlock txtNotes = new TextBlock
 			{
-				Text = "កំណែថ្មី Version 2.0.9 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
+				Text = "កំណែថ្មី Version 2.1.0 រួមមាន:\n• Smart Auto-Analysis Updater: វិភាគដោយស្វ័យប្រវត្តិរវាង Fast Patch (< 1 MB) និង Full Installer (~140 MB)\n• CheckBox ក្នុង 📋 Episodes សម្រាប់ Tick ជ្រើសរើសភាគច្រើន/តិច រួច Translate Selected តែម្តង",
 				FontSize = 12.5,
 				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
 				TextWrapping = TextWrapping.Wrap,
@@ -2977,13 +2977,58 @@ public static class Hook
 			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = "2.0.9";
+			string currentVer = "2.1.0";
 			string latestVer = currentVer;
 			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
 			string sha256Expected = "";
+			string patchUrl = "";
+			string patchSha256Expected = "";
+			long patchSizeBytes = 0;
+			string minPatchVersion = "";
+			bool usePatchMode = false;
+			string analysisReason = "";
 			bool isMandatory = false;
 			CancellationTokenSource cts = null;
+
+			Func<string, string?, string?, long, (bool UsePatch, string Summary)> analyzeUpdateStrategy = (curV, pUrl, minPV, pSize) =>
+			{
+				if (string.IsNullOrWhiteSpace(pUrl))
+					return (false, "📦 Full Installer (~140 MB)");
+
+				if (!string.IsNullOrWhiteSpace(minPV) && Version.TryParse(minPV, out var minVer) && Version.TryParse(curV, out var localV) && localV < minVer)
+					return (false, $"📦 Full Installer (Upgrade from v{curV} < v{minPV})");
+
+				string baseDir = AppContext.BaseDirectory;
+				string[] requiredCoreFiles = new[]
+				{
+					"SnaDubber.exe",
+					"SnaDubber.deps.json",
+					Path.Combine("Tools", "ffmpeg.exe"),
+					Path.Combine("Tools", "ffprobe.exe"),
+					Path.Combine("Tools", "yt-dlp.exe")
+				};
+				foreach (string rel in requiredCoreFiles)
+				{
+					string full = Path.Combine(baseDir, rel);
+					if (!File.Exists(full) || new FileInfo(full).Length == 0)
+						return (false, $"📦 Full Repair Installer (Missing {rel})");
+				}
+
+				try
+				{
+					string probePath = Path.Combine(baseDir, $".update_perm_probe_{Guid.NewGuid():N}.tmp");
+					File.WriteAllText(probePath, "ok");
+					File.Delete(probePath);
+				}
+				catch
+				{
+					return (false, "📦 Full Installer (Admin permission needed)");
+				}
+
+				string sizeLabel = pSize > 0 ? $"~{pSize / (1024.0 * 1024.0):0.00} MB" : "< 1 MB";
+				return (true, $"⚡ Smart Fast Patch ({sizeLabel})");
+			};
 
 			Action<string, string> setBadge = (text, bgHex) =>
 			{
@@ -3025,13 +3070,17 @@ public static class Hook
 					string? downloadUrlFound = null;
 					string? releaseNotesFound = null;
 					string? sha256Found = null;
+					string? patchUrlFound = null;
+					string? patchSha256Found = null;
+					long patchSizeFound = 0;
+					string? minPatchVerFound = null;
 					bool mandatoryFound = false;
 
 					// 1. Primary: Query GitHub raw version.json directly
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.9");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.0");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3044,6 +3093,10 @@ public static class Hook
 							if (rootEl.TryGetProperty("download_url", out var du)) downloadUrlFound = du.GetString();
 							if (rootEl.TryGetProperty("release_notes", out var rn)) releaseNotesFound = rn.GetString();
 							if (rootEl.TryGetProperty("sha256", out var sha)) sha256Found = sha.GetString();
+							if (rootEl.TryGetProperty("patch_url", out var pu)) patchUrlFound = pu.GetString();
+							if (rootEl.TryGetProperty("patch_sha256", out var ps)) patchSha256Found = ps.GetString();
+							if (rootEl.TryGetProperty("patch_size_bytes", out var psz) && psz.TryGetInt64(out long pszVal)) patchSizeFound = pszVal;
+							if (rootEl.TryGetProperty("min_patch_version", out var mpv)) minPatchVerFound = mpv.GetString();
 							if (rootEl.TryGetProperty("mandatory", out var man)) mandatoryFound = man.GetBoolean();
 						}
 					}
@@ -3055,7 +3108,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.9");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.0");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -3070,6 +3123,10 @@ public static class Hook
 									if (dataEl.TryGetProperty("download_url", out var du)) downloadUrlFound = du.GetString();
 									if (dataEl.TryGetProperty("release_notes", out var rn)) releaseNotesFound = rn.GetString();
 									if (dataEl.TryGetProperty("sha256", out var sha)) sha256Found = sha.GetString();
+									if (dataEl.TryGetProperty("patch_url", out var pu)) patchUrlFound = pu.GetString();
+									if (dataEl.TryGetProperty("patch_sha256", out var ps)) patchSha256Found = ps.GetString();
+									if (dataEl.TryGetProperty("patch_size_bytes", out var psz) && psz.TryGetInt64(out long pszVal)) patchSizeFound = pszVal;
+									if (dataEl.TryGetProperty("min_patch_version", out var mpv)) minPatchVerFound = mpv.GetString();
 									if (dataEl.TryGetProperty("mandatory", out var man)) mandatoryFound = man.GetBoolean();
 								}
 							}
@@ -3099,7 +3156,15 @@ public static class Hook
 							txtNotes.Text = latestNotesText;
 							txtNotesHeader.Text = $"📦 ព័ត៌មាន Update (v{latestVer}):";
 							sha256Expected = sha256Found ?? "";
+							patchUrl = patchUrlFound ?? "";
+							patchSha256Expected = patchSha256Found ?? "";
+							patchSizeBytes = patchSizeFound;
+							minPatchVersion = minPatchVerFound ?? "";
 							isMandatory = mandatoryFound;
+
+							var strategy = analyzeUpdateStrategy(currentVer, patchUrl, minPatchVersion, patchSizeBytes);
+							usePatchMode = strategy.UsePatch;
+							analysisReason = strategy.Summary;
 						}
 					}
 
@@ -3110,7 +3175,7 @@ public static class Hook
 					{
 						setBadge(isMandatory ? "Mandatory Update" : "Update Available", isMandatory ? "#0284C7" : "#0284C7");
 						setProgressPct(0);
-						txtStats.Text = $"Version v{latestVer} is available — click Download Update Now.";
+						txtStats.Text = $"Version v{latestVer} is available • {analysisReason}";
 						setUpdateBtnReady(true);
 						if (isMandatory) btnLater.Visibility = Visibility.Collapsed;
 					}
@@ -3158,65 +3223,163 @@ public static class Hook
 				cts = new CancellationTokenSource();
 				string tempDir = Path.Combine(Path.GetTempPath(), "ToolDubberUpdates");
 				Directory.CreateDirectory(tempDir);
-				string tempPath = Path.Combine(tempDir, $"ToolDubber_Setup_{latestVer}_{Guid.NewGuid():N}.exe");
+				string tempExePath = Path.Combine(tempDir, $"ToolDubber_Setup_{latestVer}_{Guid.NewGuid():N}.exe");
+				string tempPatchPath = Path.Combine(tempDir, $"ToolDubber_Patch_{latestVer}_{Guid.NewGuid():N}.zip");
+				string activeTempPath = tempExePath;
+
+				Func<string, string, string, Task<bool>> downloadFileWithProgressAsync = async (url, destPath, labelPrefix) =>
+				{
+					try
+					{
+						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.0");
+
+						using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+						if (!resp.IsSuccessStatusCode) return false;
+
+						long total = resp.Content.Headers.ContentLength ?? -1L;
+						using var srcStream = await resp.Content.ReadAsStreamAsync(cts.Token);
+						using var dstStream = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true);
+
+						byte[] buf = new byte[65536];
+						long readTotal = 0;
+						int r;
+						var sw = Stopwatch.StartNew();
+						long lastRead = 0;
+						TimeSpan lastT = sw.Elapsed;
+
+						while ((r = await srcStream.ReadAsync(buf, 0, buf.Length, cts.Token)) > 0)
+						{
+							await dstStream.WriteAsync(buf, 0, r, cts.Token);
+							readTotal += r;
+
+							TimeSpan curT = sw.Elapsed;
+							double diffSec = (curT - lastT).TotalSeconds;
+							if (diffSec >= 0.20 || readTotal == total)
+							{
+								long bytesDiff = readTotal - lastRead;
+								double speed = diffSec > 0 ? (bytesDiff / (1024.0 * 1024.0)) / diffSec : 0.0;
+								int pct = total > 0 ? (int)((readTotal * 100) / total) : 0;
+
+								progressBar.Value = pct;
+								setProgressPct(pct);
+								double downMB = readTotal / (1024.0 * 1024.0);
+								double totMB = total > 0 ? total / (1024.0 * 1024.0) : downMB;
+								txtStats.Text = $"{labelPrefix} {pct}% ({downMB:0.00} / {totMB:0.00} MB • {speed:0.00} MB/s)";
+
+								lastRead = readTotal;
+								lastT = curT;
+							}
+						}
+						return File.Exists(destPath) && new FileInfo(destPath).Length > 0;
+					}
+					catch (OperationCanceledException) { throw; }
+					catch { return false; }
+				};
+
+				Func<string, string, Task<bool>> verifySha256Async = async (filePath, expectedHex) =>
+				{
+					if (string.IsNullOrWhiteSpace(expectedHex)) return true;
+					using var sha = System.Security.Cryptography.SHA256.Create();
+					using var fs = File.OpenRead(filePath);
+					byte[] hash = await sha.ComputeHashAsync(fs, cts.Token);
+					string hashHex = Convert.ToHexString(hash).ToLowerInvariant();
+					return string.Equals(hashHex, expectedHex.Trim().ToLowerInvariant(), StringComparison.OrdinalIgnoreCase);
+				};
 
 				try
 				{
+					bool appliedPatch = false;
+
+					// 1. Try Smart Fast Patch (.zip) if auto-analysis selected it
+					if (usePatchMode && !string.IsNullOrWhiteSpace(patchUrl))
+					{
+						txtStatus.Text = "Downloading fast patch...";
+						txtStats.Text = "⚡ Smart Patch: Downloading modified files...";
+						activeTempPath = tempPatchPath;
+
+						bool patchOk = await downloadFileWithProgressAsync(patchUrl, tempPatchPath, "⚡ Fast Patch...");
+						if (patchOk)
+						{
+							txtStatus.Text = "Verifying fast patch...";
+							txtStats.Text = "Checking fast patch SHA-256 & zip integrity...";
+							bool hashOk = await verifySha256Async(tempPatchPath, patchSha256Expected);
+							bool zipOk = false;
+							if (hashOk)
+							{
+								try
+								{
+									using var za = System.IO.Compression.ZipFile.OpenRead(tempPatchPath);
+									zipOk = za.Entries.Count > 0;
+								}
+								catch { zipOk = false; }
+							}
+
+							if (hashOk && zipOk)
+							{
+								appliedPatch = true;
+								setProgressPct(100);
+								txtStats.Text = "⚡ Fast Patch verified. Updating files & restarting...";
+
+								try
+								{
+									string markerPayload = System.Text.Json.JsonSerializer.Serialize(new
+									{
+										version = latestVer,
+										release_notes = latestNotesText
+									});
+									File.WriteAllText(GetPostUpdateMarkerPath(), markerPayload, Encoding.UTF8);
+								}
+								catch { }
+
+								await Task.Delay(300);
+
+								int pid = Process.GetCurrentProcess().Id;
+								string currentExe = Process.GetCurrentProcess().MainModule?.FileName ?? Path.Combine(AppContext.BaseDirectory, "SnaDubber.exe");
+								string appDir = AppContext.BaseDirectory.TrimEnd('\\', '/');
+								string patchRunnerBat = Path.Combine(Path.GetTempPath(), $"patch_runner_{Guid.NewGuid():N}.bat");
+								string psCmd = $"powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; if ($p) {{ $p.WaitForExit(15000) | Out-Null; if (!$p.HasExited) {{ Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500 }} }}; Expand-Archive -LiteralPath '{tempPatchPath}' -DestinationPath '{appDir}' -Force; Remove-Item -LiteralPath '{tempPatchPath}' -Force -ErrorAction SilentlyContinue; Start-Process -FilePath '{currentExe}'\"";
+								string batCode = $@"@echo off
+timeout /t 1 /nobreak >nul
+{psCmd}
+del ""%~f0""
+";
+								File.WriteAllText(patchRunnerBat, batCode);
+								Process.Start(new ProcessStartInfo
+								{
+									FileName = patchRunnerBat,
+									UseShellExecute = true,
+									CreateNoWindow = true,
+									WindowStyle = ProcessWindowStyle.Hidden
+								});
+
+								Application.Current.Shutdown();
+								return;
+							}
+						}
+
+						// Auto-fallback to Full Installer if patch download or verification failed
+						try { if (File.Exists(tempPatchPath)) File.Delete(tempPatchPath); } catch { }
+						if (!appliedPatch)
+						{
+							txtStats.Text = "Fast patch unavailable — switching to Full Installer...";
+							setProgressPct(0);
+							progressBar.Value = 0;
+						}
+					}
+
+					// 2. Full Installer (.exe) flow (primary when selected by analysis, or automatic fallback)
+					activeTempPath = tempExePath;
 					bool downloadDone = false;
 					string[] localCandidates = new[]
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
 						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.9.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.9.exe")
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.1.0.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.1.0.exe")
 					};
 
-					try
-					{
-						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.9");
-
-						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-						if (resp.IsSuccessStatusCode)
-						{
-							long total = resp.Content.Headers.ContentLength ?? -1L;
-							using var srcStream = await resp.Content.ReadAsStreamAsync(cts.Token);
-							using var dstStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true);
-
-							byte[] buf = new byte[65536];
-							long readTotal = 0;
-							int r;
-							var sw = Stopwatch.StartNew();
-							long lastRead = 0;
-							TimeSpan lastT = sw.Elapsed;
-
-							while ((r = await srcStream.ReadAsync(buf, 0, buf.Length, cts.Token)) > 0)
-							{
-								await dstStream.WriteAsync(buf, 0, r, cts.Token);
-								readTotal += r;
-
-								TimeSpan curT = sw.Elapsed;
-								double diffSec = (curT - lastT).TotalSeconds;
-								if (diffSec >= 0.25 || readTotal == total)
-								{
-									long bytesDiff = readTotal - lastRead;
-									double speed = diffSec > 0 ? (bytesDiff / (1024.0 * 1024.0)) / diffSec : 0.0;
-									int pct = total > 0 ? (int)((readTotal * 100) / total) : 0;
-
-									progressBar.Value = pct;
-									setProgressPct(pct);
-									double downMB = readTotal / (1024.0 * 1024.0);
-									double totMB = total / (1024.0 * 1024.0);
-									txtStats.Text = $"Downloading... {pct}% ({downMB:0.00} / {totMB:0.00} MB • {speed:0.00} MB/s)";
-
-									lastRead = readTotal;
-									lastT = curT;
-								}
-							}
-							downloadDone = true;
-						}
-					}
-					catch { }
+					downloadDone = await downloadFileWithProgressAsync(downloadUrl, tempExePath, "📦 Downloading...");
 
 					if (!downloadDone)
 					{
@@ -3224,7 +3387,7 @@ public static class Hook
 						{
 							if (File.Exists(cand) && new FileInfo(cand).Length > 10000000)
 							{
-								File.Copy(cand, tempPath, true);
+								File.Copy(cand, tempExePath, true);
 								downloadDone = true;
 								txtStatus.Text = "Using local package...";
 								break;
@@ -3232,7 +3395,7 @@ public static class Hook
 						}
 					}
 
-					if (!downloadDone || !File.Exists(tempPath))
+					if (!downloadDone || !File.Exists(tempExePath))
 					{
 						throw new InvalidOperationException($"Could not download update from {downloadUrl}. Please check your connection or download from GitHub Releases.");
 					}
@@ -3241,17 +3404,10 @@ public static class Hook
 					txtStatus.Text = "Verifying update...";
 					txtStats.Text = "Checking file checksum integrity...";
 
-					if (!string.IsNullOrWhiteSpace(sha256Expected))
+					if (!await verifySha256Async(tempExePath, sha256Expected))
 					{
-						using var sha = System.Security.Cryptography.SHA256.Create();
-						using var fs = File.OpenRead(tempPath);
-						byte[] hash = await sha.ComputeHashAsync(fs, cts.Token);
-						string hashHex = Convert.ToHexString(hash).ToLowerInvariant();
-						if (!string.Equals(hashHex, sha256Expected.Trim().ToLowerInvariant(), StringComparison.OrdinalIgnoreCase))
-						{
-							try { File.Delete(tempPath); } catch { }
-							throw new InvalidOperationException($"Checksum mismatch! Expected: {sha256Expected}, Computed: {hashHex}");
-						}
+						try { File.Delete(tempExePath); } catch { }
+						throw new InvalidOperationException($"Checksum mismatch for Full Installer!");
 					}
 
 					setProgressPct(100);
@@ -3270,16 +3426,16 @@ public static class Hook
 
 					await Task.Delay(350);
 
-					string currentExe = Process.GetCurrentProcess().MainModule?.FileName;
+					string exePathToRun = Process.GetCurrentProcess().MainModule?.FileName;
 					string runnerBat = Path.Combine(Path.GetTempPath(), $"update_runner_{Guid.NewGuid():N}.bat");
-					string batCode = $@"@echo off
+					string exeBatCode = $@"@echo off
 timeout /t 2 /nobreak >nul
-start """" /wait ""{tempPath}"" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS
+start """" /wait ""{tempExePath}"" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS
 timeout /t 1 /nobreak >nul
-start """" ""{currentExe}""
+start """" ""{exePathToRun}""
 del ""%~f0""
 ";
-					File.WriteAllText(runnerBat, batCode);
+					File.WriteAllText(runnerBat, exeBatCode);
 					Process.Start(new ProcessStartInfo
 					{
 						FileName = runnerBat,
@@ -3292,14 +3448,16 @@ del ""%~f0""
 				}
 				catch (OperationCanceledException)
 				{
-					try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+					try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { }
+					try { if (File.Exists(tempPatchPath)) File.Delete(tempPatchPath); } catch { }
 					txtStats.Text = "Download cancelled by user.";
 					btnRetry.Visibility = Visibility.Visible;
 					setUpdateBtnReady(true);
 				}
 				catch (Exception ex)
 				{
-					try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+					try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { }
+					try { if (File.Exists(tempPatchPath)) File.Delete(tempPatchPath); } catch { }
 					txtStats.Text = $"Update error: {ex.Message}";
 					btnRetry.Visibility = Visibility.Visible;
 					setUpdateBtnReady(true);
