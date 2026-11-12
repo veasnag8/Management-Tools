@@ -2601,7 +2601,7 @@ public static class Hook
 
 			StackPanel curVerCol = new StackPanel();
 			curVerCol.Children.Add(new TextBlock { Text = "CURRENT VERSION", FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)) });
-			TextBlock txtCurVer = new TextBlock { Text = "2.0.2", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
+			TextBlock txtCurVer = new TextBlock { Text = "2.0.3", FontSize = 15, FontWeight = FontWeights.Bold, Foreground = Brushes.White, Margin = new Thickness(0, 2, 0, 0) };
 			curVerCol.Children.Add(txtCurVer);
 			infoGrid.Children.Add(curVerCol);
 
@@ -2779,7 +2779,7 @@ public static class Hook
 			dialog.Content = root;
 
 			// Logic & State
-			string currentVer = "2.0.2";
+			string currentVer = "2.0.3";
 			string latestVer = currentVer;
 			string downloadUrl = "";
 			string sha256Expected = "";
@@ -2815,7 +2815,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.2");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.3");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -2839,7 +2839,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.2");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.3");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -2892,9 +2892,9 @@ public static class Hook
 					{
 						setBadge("Up to Date", "#059669");
 						txtStatus.Text = "No updates available.";
-						txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.2).\nAll latest features and enhancements are active.";
+						txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.3).\nAll latest features and enhancements are active.";
 						progressCard.Visibility = Visibility.Collapsed;
-						MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.2).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+						MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.3).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 					}
 				}
 				catch (Exception)
@@ -2902,9 +2902,9 @@ public static class Hook
 					progressBar.IsIndeterminate = false;
 					setBadge("Up to Date", "#059669");
 					txtStatus.Text = "No updates available.";
-					txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.2).";
+					txtNotes.Text = "You are using the latest version of Tool Dubber (v2.0.3).";
 					progressCard.Visibility = Visibility.Collapsed;
-					MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.2).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
+					MessageBox.Show("You are using the latest version of Tool Dubber (v2.0.3).\nលោកអ្នកកំពុងប្រើប្រាស់ជំនាន់ចុងក្រោយបង្អស់ហើយ។", "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
 				}
 				finally
 				{
@@ -2943,14 +2943,14 @@ public static class Hook
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
 						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.2.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.2.exe")
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.3.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.3.exe")
 					};
 
 					try
 					{
 						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.2");
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.3");
 
 						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 						if (resp.IsSuccessStatusCode)
@@ -7912,12 +7912,27 @@ del ""%~f0""
 			return;
 		}
 
-		// 11. Left Sidebar Tools (Blur, Text, Photo/mini vid, Add Sponsor, Watermark)
+		// Hide Watermark and Music buttons from the left VISUALS sidebar (keep Add Sponsor)
+		string sidebarCmd = btn.CommandParameter as string ?? "";
+		if (buttonText.IndexOf("Watermark", StringComparison.OrdinalIgnoreCase) >= 0
+			|| string.Equals(buttonText.Trim(), "Music", StringComparison.OrdinalIgnoreCase)
+			|| (buttonText.IndexOf("Music", StringComparison.OrdinalIgnoreCase) >= 0
+				&& buttonText.IndexOf("Audio", StringComparison.OrdinalIgnoreCase) < 0
+				&& buttonText.IndexOf("Mute", StringComparison.OrdinalIgnoreCase) < 0
+				&& buttonText.IndexOf("BGM", StringComparison.OrdinalIgnoreCase) < 0
+				&& btn.ActualWidth <= 120)
+			|| string.Equals(sidebarCmd, "watermark", StringComparison.OrdinalIgnoreCase))
+		{
+			btn.Visibility = Visibility.Collapsed;
+			btn.IsEnabled = false;
+			return;
+		}
+
+		// 11. Left Sidebar Tools (Blur, Text, Photo/mini vid, Add Sponsor)
 		if (buttonText.IndexOf("Blur", StringComparison.OrdinalIgnoreCase) >= 0
 			|| buttonText.IndexOf("Text", StringComparison.OrdinalIgnoreCase) >= 0
 			|| buttonText.IndexOf("Photo", StringComparison.OrdinalIgnoreCase) >= 0
-			|| buttonText.IndexOf("Sponsor", StringComparison.OrdinalIgnoreCase) >= 0
-			|| buttonText.IndexOf("Watermark", StringComparison.OrdinalIgnoreCase) >= 0)
+			|| buttonText.IndexOf("Sponsor", StringComparison.OrdinalIgnoreCase) >= 0)
 		{
 			bool isActiveTool = false;
 			Window parentWin = Window.GetWindow(btn);

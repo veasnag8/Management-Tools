@@ -1,9 +1,9 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.0.2",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.2/ToolDubber-Setup-v2.0.2.exe",
-  "release_notes": "កំណែថ្មី Version 2.0.2 រួមមាន:\n1. ពេល Preview Play លើ Tool គឺបិទសំឡេងចិនដើមទាំងស្រុង ហើយបន្លឺសំឡេងបកប្រែជាភាសាខ្មែរ (Khmer Neural Voice) យ៉ាងរលូនស្របតាមរូបភាព\n2. ពេល Export វីដេអូចុងក្រោយ ធានា ១០០% ជាប់សំឡេងនិយាយភាសាខ្មែរច្បាស់ល្អ គ្មានជាប់សំឡេងចិនដើម\n3. Blur Tool រចនាបែប Frosted Blur ស្អាត គ្មានស៊ុមពណ៌ខៀវ (No Frame/Border) និងគ្មានអក្សរ [BLUR ORIGINAL CHINESE TITLE] រំខានលើ Preview ទៀតឡើយ\n4. ទីតាំង Blur ក្នុងវីដេអូ Export ចំចំណងជើងរង (Subtitles) យ៉ាងសុក្រឹត ១០០% ទាំងទម្រង់ 16:9 និង 9:16 (លែងខុសទីតាំងទៅលើថ្ងាសទៀតហើយ)\n5. ប្រព័ន្ធ Check for Updates ដំណើរការ ១០០% អាចស្វែងរកឃើញ Version 2.0.2 និងដំឡើងដោយស្វ័យប្រវត្តិ",
-  "sha256": "b71ce6d5b6d31da6c4208adeb93525a05c6a08e6e08fe35df0c1c1bc6d0e34dd",
+  "latest_version": "2.0.3",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.3/ToolDubber-Setup-v2.0.3.exe",
+  "release_notes": "កំណែថ្មី Version 2.0.3 រួមមាន:\n1. ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (VISUALS Sidebar) ដើម្បីឱ្យផ្ទាំងប្រើប្រាស់កាន់តែស្អាត និងរក្សាទុកប៊ូតុង Add Sponsor ដូចដើម\n2. រក្សាមុខងារបកប្រែសំឡេងខ្មែរ (Preview & Export), Frosted Blur ឥតស៊ុម និងប្រព័ន្ធ Check for Updates ស្វ័យប្រវត្តិពេញលេញ",
+  "sha256": "f652e5ceb8fb06a68f0efbe5f7649d4d0550a3628e5471a867bf8ff311c5fe13",
   "mandatory": false
 }
