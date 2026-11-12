@@ -1,9 +1,9 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.0.8",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.8/ToolDubber-Setup-v2.0.8.exe",
-  "release_notes": "កំណែថ្មី Version 2.0.8 រួមមាន:\n1. ប្តូរទីតាំងប៊ូតុង 📋 Episodes មកដាក់នៅជាប់ ✂ Split Videos (មុនប៊ូតុង 🎙 Transcribe & Translate AI)\n2. កែសម្រួលបញ្ជី 📋 Episodes ឱ្យបង្ហាញតែភាគវីដេអូពិតប្រាកដដែលអ្នកបាន Split និងកែពណ៌ប៊ូតុង Disabled ឱ្យងាយមើល\n3. Split Videos រហ័សទាន់ចិត្ត៖ បំបែកវីដេអូជាភាគៗ (Parallel Stream-Copy) ដោយមិនទាន់ Translate ស្វ័យប្រវត្តិទេ\n4. Auto-Update Center រចនាថ្មីស្អាត ដំឡើង Update ស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីឡើងវិញភ្លាមៗ",
-  "sha256": "c2c3f6828106fd16d18658c5ae1733a7191a04820ceeacf1ea9c4de95f364528",
+  "latest_version": "2.0.9",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.0.9/ToolDubber-Setup-v2.0.9.exe",
+  "release_notes": "កំណែថ្មី Version 2.0.9 រួមមាន:\n1. បន្ថែម CheckBox ក្នុងបញ្ជី 📋 Episodes ដើម្បី Tick ជ្រើសរើសភាគច្រើន ឬតិច (Select All / Clear) រួចចុច Translate Selected តែម្តង\n2. ដាក់ប៊ូតុង 📋 Episodes នៅជាប់ ✂ Split Videos (មុនប៊ូតុង 🎙 Transcribe & Translate AI)\n3. កែ Auto-Update Center ឱ្យបង្ហាញ Up to Date ✓ ពេលប្រើ Version ចុងក្រោយរួចហើយ និងបង្ហាញ Release Notes ថ្មីជានិច្ច",
+  "sha256": "e95738c8fce63c23fe091e91cbd835c9c6470e59e9fd486fc64ed7541cf574ab",
   "mandatory": false
 }

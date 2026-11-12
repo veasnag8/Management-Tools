@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.0.8";
+			window.Title = "SNA-Dubber Version 2.0.9";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -2429,6 +2429,22 @@ public static class Hook
 			{
 				Button existing = topHost.Children.OfType<Button>().First(b => (b.Tag as string ?? "").StartsWith("TopTranscribeButton"));
 				existing.Visibility = Visibility.Visible;
+				Button epBtn = topHost.Children.OfType<Button>().FirstOrDefault(b => (b.Tag as string) == "EpisodesListButton");
+				if (splitBtn != null && epBtn != null)
+				{
+					int sIdx = topHost.Children.IndexOf(splitBtn);
+					if (topHost.Children.IndexOf(epBtn) != sIdx + 1)
+					{
+						topHost.Children.Remove(epBtn);
+						topHost.Children.Insert(Math.Min(topHost.Children.Count, topHost.Children.IndexOf(splitBtn) + 1), epBtn);
+					}
+					int eIdx = topHost.Children.IndexOf(epBtn);
+					if (topHost.Children.IndexOf(existing) != eIdx + 1)
+					{
+						topHost.Children.Remove(existing);
+						topHost.Children.Insert(Math.Min(topHost.Children.Count, topHost.Children.IndexOf(epBtn) + 1), existing);
+					}
+				}
 				_isTranscribeTopHooked = true;
 				return;
 			}
@@ -2591,7 +2607,7 @@ public static class Hook
 			try { File.Delete(markerPath); } catch { }
 
 			using var doc = System.Text.Json.JsonDocument.Parse(json);
-			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.8") : "2.0.8";
+			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.0.9") : "2.0.9";
 			string notes = doc.RootElement.TryGetProperty("release_notes", out var nEl) ? (nEl.GetString() ?? "") : "";
 
 			window.Dispatcher.BeginInvoke((Action)(() =>
@@ -2690,7 +2706,7 @@ public static class Hook
 			Grid.SetRow(headerGrid, 0);
 			root.Children.Add(headerGrid);
 
-			// Row 1: Compact Version Bar (Current: v2.0.8 -> Latest: v2.0.8   [Up to Date ✓])
+			// Row 1: Compact Version Bar (Current: v2.0.9 -> Latest: v2.0.9   [Up to Date ✓])
 			Border infoCard = new Border
 			{
 				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
@@ -2706,10 +2722,10 @@ public static class Hook
 
 			StackPanel verRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(new TextBlock { Text = "Current: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtCurVer = new TextBlock { Text = "v2.0.8", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtCurVer = new TextBlock { Text = "v2.0.9", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtCurVer);
 			verRow.Children.Add(new TextBlock { Text = "  →  Latest: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.8", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtLatestVer = new TextBlock { Text = "v2.0.9", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtLatestVer);
 			infoGrid.Children.Add(verRow);
 
@@ -2914,7 +2930,7 @@ public static class Hook
 
 			TextBlock txtNotesHeader = new TextBlock
 			{
-				Text = "📦 ព័ត៌មាន Update (v2.0.8):",
+				Text = "📦 ព័ត៌មាន Update (v2.0.9):",
 				FontSize = 13,
 				FontWeight = FontWeights.Bold,
 				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
@@ -2944,7 +2960,7 @@ public static class Hook
 			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 			TextBlock txtNotes = new TextBlock
 			{
-				Text = "កំណែថ្មី Version 2.0.8 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
+				Text = "កំណែថ្មី Version 2.0.9 រួមមាន:\n• ដកចេញប៊ូតុង Watermark និង Music ពីរបារខាងឆ្វេង (រក្សាទុក Add Sponsor)\n• Auto-Update Center រចនាថ្មី ដំឡើងស្វ័យប្រវត្តិស្ងាត់ៗ (Silent Update) និងបើកកម្មវិធីវិញភ្លាមៗ",
 				FontSize = 12.5,
 				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
 				TextWrapping = TextWrapping.Wrap,
@@ -2961,7 +2977,7 @@ public static class Hook
 			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = "2.0.8";
+			string currentVer = "2.0.9";
 			string latestVer = currentVer;
 			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
@@ -3015,7 +3031,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.8");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.9");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3039,7 +3055,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.8");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.9");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -3061,7 +3077,15 @@ public static class Hook
 						catch { }
 					}
 
-					// Semantic version comparison
+					// Semantic version comparison (never trust static has_update flag alone)
+					hasUpdate = false;
+					if (!string.IsNullOrWhiteSpace(releaseNotesFound))
+					{
+						latestNotesText = releaseNotesFound;
+						txtNotes.Text = latestNotesText;
+						if (!string.IsNullOrEmpty(latestVersionFound))
+							txtNotesHeader.Text = $"📦 ព័ត៌មាន Update (v{latestVersionFound}):";
+					}
 					if (!string.IsNullOrEmpty(latestVersionFound) && Version.TryParse(latestVersionFound, out Version? remoteVer) && Version.TryParse(currentVer, out Version? localVer))
 					{
 						if (remoteVer > localVer)
@@ -3143,14 +3167,14 @@ public static class Hook
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
 						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.8.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.8.exe")
+						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.0.9.exe"),
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.0.9.exe")
 					};
 
 					try
 					{
 						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.8");
+						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.0.9");
 
 						using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 						if (resp.IsSuccessStatusCode)
@@ -3563,7 +3587,7 @@ del ""%~f0""
 				btn.Template = tpl;
 			};
 
-			StackPanel header = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+			StackPanel header = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
 			header.Children.Add(new TextBlock
 			{
 				Text = $"📋 Split Episodes List ({realEpisodes.Count})",
@@ -3573,11 +3597,66 @@ del ""%~f0""
 			});
 			header.Children.Add(new TextBlock
 			{
-				Text = "ជ្រើសរើសភាគណាមួយដើម្បី Load ចូលកម្មវិធី រួចចុច Translate នៅពេលអ្នកចង់បកប្រែ។",
+				Text = "ធីក (Checkbox) លើភាគដែលអ្នកចង់ Translate ច្រើនក្នុងពេលតែមួយ ឬចុច Load & Preview លើភាគណាមួយ។",
 				Foreground = mutedBrush,
 				FontSize = 11.5,
 				Margin = new Thickness(0, 4, 0, 0)
 			});
+
+			var selectedChecks = new List<(EpisodeItem Episode, CheckBox Box)>();
+			Button translateSelectedBtn = new Button
+			{
+				Content = "🎙 Translate Selected (0)",
+				Padding = new Thickness(16, 8, 16, 8),
+				Background = new LinearGradientBrush(Color.FromRgb(79, 70, 229), Color.FromRgb(124, 58, 237), 45),
+				Foreground = Brushes.White,
+				BorderBrush = new SolidColorBrush(Color.FromRgb(167, 139, 250)),
+				BorderThickness = new Thickness(1),
+				FontWeight = FontWeights.Bold,
+				Margin = new Thickness(0, 0, 10, 0),
+				Cursor = Cursors.Hand,
+				IsEnabled = false
+			};
+			applyDarkBtn(translateSelectedBtn, 8);
+
+			Action refreshSelectedCount = () =>
+			{
+				int count = selectedChecks.Count(x => x.Box.IsChecked == true && !string.IsNullOrEmpty(x.Episode.VideoPath) && File.Exists(x.Episode.VideoPath));
+				translateSelectedBtn.Content = $"🎙 Translate Selected ({count})";
+				translateSelectedBtn.IsEnabled = count > 0;
+			};
+
+			StackPanel selectBar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+			Button btnSelAll = new Button
+			{
+				Content = "✓ Select All",
+				Padding = new Thickness(12, 5, 12, 5),
+				Background = cardBrush,
+				Foreground = accentBrush,
+				BorderBrush = borderBrush,
+				BorderThickness = new Thickness(1),
+				Margin = new Thickness(0, 0, 8, 0),
+				Cursor = Cursors.Hand,
+				IsEnabled = realEpisodes.Count > 0
+			};
+			applyDarkBtn(btnSelAll, 6);
+			Button btnSelNone = new Button
+			{
+				Content = "Clear",
+				Padding = new Thickness(12, 5, 12, 5),
+				Background = cardBrush,
+				Foreground = mutedBrush,
+				BorderBrush = borderBrush,
+				BorderThickness = new Thickness(1),
+				Cursor = Cursors.Hand,
+				IsEnabled = realEpisodes.Count > 0
+			};
+			applyDarkBtn(btnSelNone, 6);
+			btnSelAll.Click += (s, e) => { foreach (var x in selectedChecks) if (x.Box.IsEnabled) x.Box.IsChecked = true; refreshSelectedCount(); };
+			btnSelNone.Click += (s, e) => { foreach (var x in selectedChecks) x.Box.IsChecked = false; refreshSelectedCount(); };
+			selectBar.Children.Add(btnSelAll);
+			selectBar.Children.Add(btnSelNone);
+			header.Children.Add(selectBar);
 
 			StackPanel listPanel = new StackPanel();
 			string firstFolder = folderOverride;
@@ -3603,10 +3682,27 @@ del ""%~f0""
 						firstFolder = Path.GetDirectoryName(ep.VideoPath);
 					}
 
+					bool fileExists = !string.IsNullOrEmpty(ep.VideoPath) && File.Exists(ep.VideoPath);
+
 					Grid row = new Grid();
+					row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 					row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 					row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 					row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+					CheckBox epCheck = new CheckBox
+					{
+						IsChecked = false,
+						IsEnabled = fileExists,
+						VerticalAlignment = VerticalAlignment.Center,
+						Margin = new Thickness(0, 0, 12, 0),
+						Cursor = Cursors.Hand
+					};
+					epCheck.Checked += (s, e) => refreshSelectedCount();
+					epCheck.Unchecked += (s, e) => refreshSelectedCount();
+					selectedChecks.Add((ep, epCheck));
+					Grid.SetColumn(epCheck, 0);
+					row.Children.Add(epCheck);
 
 					StackPanel info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
 					info.Children.Add(new TextBlock
@@ -3623,6 +3719,7 @@ del ""%~f0""
 						FontSize = 11,
 						Margin = new Thickness(0, 2, 0, 0)
 					});
+					Grid.SetColumn(info, 1);
 					row.Children.Add(info);
 
 					Border statusPill = new Border
@@ -3640,7 +3737,7 @@ del ""%~f0""
 							FontWeight = FontWeights.SemiBold
 						}
 					};
-					Grid.SetColumn(statusPill, 1);
+					Grid.SetColumn(statusPill, 2);
 					row.Children.Add(statusPill);
 
 					Button loadBtn = new Button
@@ -3652,7 +3749,7 @@ del ""%~f0""
 						BorderThickness = new Thickness(0),
 						FontWeight = FontWeights.SemiBold,
 						Cursor = Cursors.Hand,
-						IsEnabled = !string.IsNullOrEmpty(ep.VideoPath) && File.Exists(ep.VideoPath)
+						IsEnabled = fileExists
 					};
 					applyDarkBtn(loadBtn, 6);
 					EpisodeItem captured = ep;
@@ -3668,7 +3765,7 @@ del ""%~f0""
 							MessageBox.Show($"Could not load episode: {ex.Message}", "Load Episode", MessageBoxButton.OK, MessageBoxImage.Error);
 						}
 					};
-					Grid.SetColumn(loadBtn, 2);
+					Grid.SetColumn(loadBtn, 3);
 					row.Children.Add(loadBtn);
 
 					listPanel.Children.Add(new Border
@@ -3696,6 +3793,7 @@ del ""%~f0""
 			footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 			footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 			footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+			footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
 			Button openFolderBtn = new Button
 			{
@@ -3715,6 +3813,19 @@ del ""%~f0""
 			};
 			footer.Children.Add(openFolderBtn);
 
+			translateSelectedBtn.Click += async (s, e) =>
+			{
+				var chosen = selectedChecks
+					.Where(x => x.Box.IsChecked == true && !string.IsNullOrEmpty(x.Episode.VideoPath) && File.Exists(x.Episode.VideoPath))
+					.Select(x => x.Episode)
+					.ToList();
+				if (chosen.Count == 0) return;
+				dialog.Close();
+				await TranslateSelectedEpisodesAsync(owner, vm, chosen);
+			};
+			Grid.SetColumn(translateSelectedBtn, 2);
+			footer.Children.Add(translateSelectedBtn);
+
 			Button closeBtn = new Button
 			{
 				Content = "Close",
@@ -3727,7 +3838,7 @@ del ""%~f0""
 			};
 			applyDarkBtn(closeBtn, 8);
 			closeBtn.Click += (s, e) => dialog.Close();
-			Grid.SetColumn(closeBtn, 2);
+			Grid.SetColumn(closeBtn, 3);
 			footer.Children.Add(closeBtn);
 
 			Grid root = new Grid { Margin = new Thickness(20) };
@@ -3751,6 +3862,68 @@ del ""%~f0""
 		catch (Exception ex)
 		{
 			Log("ShowSplitEpisodesListDialog error: " + ex);
+		}
+	}
+
+	private static async Task TranslateSelectedEpisodesAsync(Window owner, MainViewModel vm, List<EpisodeItem> selected)
+	{
+		if (selected == null || selected.Count == 0) return;
+		string baseFolder = Path.GetDirectoryName(selected[0].VideoPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+		string khmerOutDir = Path.Combine(baseFolder, "Khmer_Exported");
+		Directory.CreateDirectory(khmerOutDir);
+
+		vm.IsBusy = true;
+		int done = 0;
+		try
+		{
+			foreach (EpisodeItem ep in selected)
+			{
+				try
+				{
+					ep.TranscriptionStatus = "Translating";
+					vm.BusyProgressPercent = done * 100.0 / selected.Count;
+					vm.BusyStatusText = $"Episode {ep.Number}: translating to Khmer ({done + 1}/{selected.Count})...";
+
+					await vm.LoadVideoFileAsync(ep.VideoPath);
+					if (vm.TranscribeAudioCommand != null) await vm.TranscribeAudioCommand.ExecuteAsync(null);
+					await RunFullPipelineAsync(vm, owner);
+
+					vm.BusyStatusText = $"Episode {ep.Number}: exporting Khmer video...";
+					string finalPath = Path.Combine(khmerOutDir, $"Episode_{ep.Number:00}_Khmer.mp4");
+					IEnumerable<OverlayItem> exportOverlays = AddTextLayersToExportOverlays(vm.Overlays, vm.TextLayers);
+					FieldInfo ffmpegField = typeof(MainViewModel).GetField("_ffmpegService", BindingFlags.Instance | BindingFlags.NonPublic);
+					if (ffmpegField?.GetValue(vm) is not IFFmpegService ffmpeg) throw new InvalidOperationException("FFmpeg export service is unavailable.");
+					SocialPreset preset = vm.SelectedSocialPreset ?? vm.SocialPresets.First();
+					bool ok = await ffmpeg.ExportVideoAsync(ep.VideoPath, finalPath, preset, vm.BlurRegions, exportOverlays, vm.TextLayers, vm.DialogueLines, vm.AudioMix, null, CancellationToken.None);
+					if (!ok || !File.Exists(finalPath)) throw new InvalidOperationException("Final episode export was not created.");
+
+					ep.TranscriptionStatus = "Exported";
+					done++;
+					vm.BusyProgressPercent = done * 100.0 / selected.Count;
+				}
+				catch (Exception ex)
+				{
+					ep.TranscriptionStatus = "Error";
+					Log($"TranslateSelectedEpisodesAsync Episode {ep.Number} error: {ex}");
+				}
+				finally
+				{
+					CleanupTemporaryExportArtifacts();
+					await CleanupGeneratedProjectFilesAsync(vm);
+				}
+			}
+
+			vm.ProjectStatusMessage = $"Translated & exported {done}/{selected.Count} episode(s) to {khmerOutDir}";
+			MessageBox.Show(
+				$"Translated & exported {done}/{selected.Count} episode(s)!\n\nOutput folder:\n{khmerOutDir}",
+				"Translate Selected Complete",
+				MessageBoxButton.OK,
+				MessageBoxImage.Information);
+		}
+		finally
+		{
+			vm.IsBusy = false;
+			vm.BusyStatusText = string.Empty;
 		}
 	}
 
