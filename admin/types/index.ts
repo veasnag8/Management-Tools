@@ -105,6 +105,19 @@ export interface DashboardStats {
 }
 
 
+export interface TokenUsage {
+  id: string;
+  license_id: string;
+  device_id: string;
+  model_name: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  task_type: string;
+  task_description: string | null;
+  created_at: string;
+}
+
 export interface ActivationLog {
   id: string;
   license_id: string;
@@ -114,4 +127,8 @@ export interface ActivationLog {
   user_agent: string | null;
   metadata?: any;
   created_at: string;
+  licenses?: {
+    license_key?: string;
+    customer_name?: string | null;
+  };
 }

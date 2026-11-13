@@ -1,14 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   KeyRound,
   CheckCircle2,
-  AlertTriangle,
   XCircle,
   Laptop2,
-  Plus,
   ArrowRight,
   ShieldAlert,
   Activity,
@@ -18,7 +16,8 @@ import {
   Eye,
   EyeOff,
   Flame,
-  Check
+  Check,
+  RefreshCw
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatDate, maskLicenseKey } from '@/lib/utils';
@@ -32,11 +31,12 @@ interface LiveTelemetryUser {
   maskedKey: string;
   state: 'translating' | 'online' | 'offline';
   tokensToday: number;
-  burnRate: number; // tok/s when translating
+  burnRate: number;
   currentTask: string;
   deviceId: string;
   expiresAt: string | null;
   status: string;
+  lastSeenAt: string | null;
 }
 
 const HUB_CX = 410;
@@ -44,11 +44,11 @@ const HUB_CY = 235;
 
 function getHubCoordinates(index: number, total: number) {
   const presets = [
-    { x: 165, y: 112 }, // Top-Left
-    { x: 655, y: 112 }, // Top-Right
-    { x: 675, y: 318 }, // Bottom-Right
-    { x: 410, y: 398 }, // Bottom-Center
-    { x: 145, y: 318 }, // Bottom-Left
+    { x: 165, y: 112 },
+    { x: 655, y: 112 },
+    { x: 675, y: 318 },
+    { x: 410, y: 398 },
+    { x: 145, y: 318 },
   ];
   if (total <= 5 && index < presets.length) {
     return presets[index];
@@ -94,212 +94,205 @@ export default function AdminDashboardPage() {
   const [sidebarFilter, setSidebarFilter] = useState<'ALL' | 'translating' | 'online' | 'offline'>('ALL');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string>('');
 
-  // 1. Fetch real Supabase database metrics
-  useEffect(() => {
-    async function fetchDashboardData() {
-      setIsLoading(true);
-      const supabase = createClient();
+  // Real-time Database Fetcher
+  const fetchRealData = useCallback(async (showIndicator = false) => {
+    if (showIndicator) setIsRefreshing(true);
+    const supabase = createClient();
 
-      try {
-        const { data: licenses } = await supabase
-          .from('licenses')
-          .select('*, products(name, product_code), devices(*)')
-          .order('created_at', { ascending: false });
+    try {
+      // 1. Fetch real licenses from Supabase
+      const { data: licenses } = await supabase
+        .from('licenses')
+        .select('*, products(name, product_code), devices(*)')
+        .order('created_at', { ascending: false });
 
-        const { count: activeDevicesCount } = await supabase
-          .from('devices')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'active');
+      // 2. Fetch real active devices count
+      const { count: activeDevicesCount } = await supabase
+        .from('devices')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
 
-        const { data: activations } = await supabase
-          .from('activations')
-          .select('*, licenses(license_key, customer_name)')
-          .order('created_at', { ascending: false })
-          .limit(6);
+      // 3. Fetch real activation logs
+      const { data: activations } = await supabase
+        .from('activations')
+        .select('*, licenses(license_key, customer_name)')
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-        if (licenses) {
-          const now = new Date();
-          const in7Days = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
-          const in30Days = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+      // 4. Fetch real Gemini token usages for today
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
 
-          let activeCount = 0;
-          let expiredCount = 0;
-          let disabledCount = 0;
-          let exp7 = 0;
-          let exp30 = 0;
+      const { data: tokenUsages } = await supabase
+        .from('token_usages')
+        .select('*')
+        .gte('created_at', todayStart.toISOString());
 
-          licenses.forEach((lic: License) => {
-            if (lic.status === 'active') activeCount++;
-            if (lic.status === 'expired') expiredCount++;
-            if (lic.status === 'disabled' || lic.status === 'revoked') disabledCount++;
-
-            if (lic.status === 'active' && lic.expires_at) {
-              const exp = new Date(lic.expires_at);
-              if (exp > now && exp <= in7Days) exp7++;
-              else if (exp > now && exp <= in30Days) exp30++;
-            }
-          });
-
-          setStats({
-            totalLicenses: licenses.length,
-            activeLicenses: activeCount,
-            expiredLicenses: expiredCount,
-            disabledLicenses: disabledCount,
-            activeDevices: activeDevicesCount || 0,
-            expiring7Days: exp7,
-            expiring30Days: exp30,
-          });
-
-          setRecentLicenses(licenses.slice(0, 5));
-
-          // Map licenses to live telemetry users
-          const mappedUsers: LiveTelemetryUser[] = licenses.slice(0, 7).map((lic: any, idx: number) => {
-            const dev = lic.devices?.[0];
-            const isFirst = idx === 0;
-            const isSecond = idx === 2;
-            const isOffline = lic.status !== 'active' || idx === 4;
-
-            const state: 'translating' | 'online' | 'offline' = isOffline
-              ? 'offline'
-              : isFirst || isSecond
-              ? 'translating'
-              : 'online';
-
-            return {
-              id: lic.id,
-              name: lic.customer_name || `Customer #${idx + 1}`,
-              email: lic.customer_email || `user${idx + 1}@license.com`,
-              licenseKey: lic.license_key,
-              maskedKey: maskLicenseKey(lic.license_key),
-              state,
-              tokensToday: isOffline ? 0 : isFirst ? 284650 : isSecond ? 412300 : 85000 + idx * 12500,
-              burnRate: isFirst ? 165 : isSecond ? 210 : 135,
-              currentTask: isFirst
-                ? 'Translating EP.14 (ZH→KM)'
-                : isSecond
-                ? 'Batch Dubbing S02E08 (EN→KM)'
-                : 'Dubber App Standby (Ready)',
-              deviceId: dev?.device_id || 'DEV-9A4D414A1F308E1141DFB327',
-              expiresAt: lic.expires_at,
-              status: lic.status,
-            };
-          });
-
-          // Fallback if no licenses in database yet
-          if (mappedUsers.length === 0) {
-            setLiveUsers([
-              {
-                id: 'demo-1',
-                name: 'Limthong',
-                email: 'limthong@gmail.com',
-                licenseKey: 'SNADUBBER-ZV5S6D92K1-DSUA',
-                maskedKey: 'SNADUBBER-ZV5S6D****-DSUA',
-                state: 'translating',
-                tokensToday: 284650,
-                burnRate: 165,
-                currentTask: 'Translating EP.14 (ZH→KM)',
-                deviceId: 'DEV-9A4D414A1F308E1141DFB327',
-                expiresAt: '2026-12-11T18:59:00Z',
-                status: 'active',
-              },
-              {
-                id: 'demo-2',
-                name: 'Song Veasna',
-                email: 'songveasna@gmail.com',
-                licenseKey: 'SNADUBBER-4JM6Q388P0-C9V2',
-                maskedKey: 'SNADUBBER-4JM6Q3****-C9V2',
-                state: 'online',
-                tokensToday: 96420,
-                burnRate: 140,
-                currentTask: 'Dubber App Standby (Ready)',
-                deviceId: 'DEV-7C81B902E4419A0238FBC110',
-                expiresAt: '2026-12-03T16:41:00Z',
-                status: 'active',
-              },
-              {
-                id: 'demo-3',
-                name: 'Rithy Chan',
-                email: 'rithy.dub@gmail.com',
-                licenseKey: 'SNADUBBER-9KP2L741M8-X4R9',
-                maskedKey: 'SNADUBBER-9KP2L7****-X4R9',
-                state: 'translating',
-                tokensToday: 412300,
-                burnRate: 210,
-                currentTask: 'Batch Dubbing S02E08 (EN→KM)',
-                deviceId: 'DEV-3E19C047B8124D5590AAE412',
-                expiresAt: '2027-01-28T10:15:00Z',
-                status: 'active',
-              },
-              {
-                id: 'demo-4',
-                name: 'Sopheak Neang',
-                email: 'sopheak.media@gmail.com',
-                licenseKey: 'SNADUBBER-6WT8N310V5-B2K7',
-                maskedKey: 'SNADUBBER-6WT8N3****-B2K7',
-                state: 'online',
-                tokensToday: 31800,
-                burnRate: 120,
-                currentTask: 'Subtitle Review Mode',
-                deviceId: 'DEV-5B72F819C3041E6671DCD809',
-                expiresAt: '2026-12-19T21:00:00Z',
-                status: 'active',
-              },
-              {
-                id: 'demo-5',
-                name: 'Dara Kem',
-                email: 'darakem@gmail.com',
-                licenseKey: 'SNADUBBER-2HY5R904J3-Q8M1',
-                maskedKey: 'SNADUBBER-2HY5R9****-Q8M1',
-                state: 'offline',
-                tokensToday: 0,
-                burnRate: 135,
-                currentTask: 'Not Used Yet',
-                deviceId: 'Unbound',
-                expiresAt: '2027-01-05T09:30:00Z',
-                status: 'active',
-              },
-            ]);
-          } else {
-            setLiveUsers(mappedUsers);
+      // Aggregate real tokens per license
+      const tokenMapByLicense: Record<string, { total: number; latestTask: string; latestAt: string }> = {};
+      if (tokenUsages && Array.isArray(tokenUsages)) {
+        tokenUsages.forEach((t: any) => {
+          if (!tokenMapByLicense[t.license_id]) {
+            tokenMapByLicense[t.license_id] = { total: 0, latestTask: '', latestAt: '' };
           }
-        }
-
-        if (activations) {
-          setRecentActivations(activations);
-        }
-      } catch (err) {
-        console.error('Failed to load dashboard metrics:', err);
-      } finally {
-        setIsLoading(false);
+          tokenMapByLicense[t.license_id].total += t.total_tokens || 0;
+          if (!tokenMapByLicense[t.license_id].latestAt || t.created_at > tokenMapByLicense[t.license_id].latestAt) {
+            tokenMapByLicense[t.license_id].latestAt = t.created_at;
+            tokenMapByLicense[t.license_id].latestTask = t.task_description || t.task_type || 'Gemini AI Call';
+          }
+        });
       }
-    }
 
-    fetchDashboardData();
-  }, []);
+      if (licenses) {
+        const now = new Date();
+        const in7Days = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+        const in30Days = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
 
-  // 2. Real-time live token ticker (smooth animation for active translating streams)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setLiveUsers((prevUsers) =>
-        prevUsers.map((u) => {
-          if (u.state === 'translating') {
-            const jitter = Math.floor(Math.random() * 30) - 10;
-            const delta = Math.max(90, u.burnRate + jitter);
-            return {
-              ...u,
-              tokensToday: u.tokensToday + delta,
-            };
+        let activeCount = 0;
+        let expiredCount = 0;
+        let disabledCount = 0;
+        let exp7 = 0;
+        let exp30 = 0;
+
+        licenses.forEach((lic: License) => {
+          if (lic.status === 'active') activeCount++;
+          if (lic.status === 'expired') expiredCount++;
+          if (lic.status === 'disabled' || lic.status === 'revoked') disabledCount++;
+
+          if (lic.status === 'active' && lic.expires_at) {
+            const exp = new Date(lic.expires_at);
+            if (exp > now && exp <= in7Days) exp7++;
+            else if (exp > now && exp <= in30Days) exp30++;
           }
-          return u;
-        })
-      );
-    }, 1000);
+        });
 
-    return () => clearInterval(timer);
+        setStats({
+          totalLicenses: licenses.length,
+          activeLicenses: activeCount,
+          expiredLicenses: expiredCount,
+          disabledLicenses: disabledCount,
+          activeDevices: activeDevicesCount || 0,
+          expiring7Days: exp7,
+          expiring30Days: exp30,
+        });
+
+        setRecentLicenses(licenses.slice(0, 5));
+
+        // Map real licenses directly to real-time telemetry nodes
+        const mappedUsers: LiveTelemetryUser[] = licenses.map((lic: any) => {
+          const dev = lic.devices?.find((d: any) => d.status === 'active') || lic.devices?.[0];
+          const tokenData = tokenMapByLicense[lic.id];
+          const tokensToday = tokenData?.total || 0;
+
+          // Determine live state strictly from real database heartbeat & device activity
+          let state: 'translating' | 'online' | 'offline' = 'offline';
+          let burnRate = 0;
+          let currentTask = 'Not Used Yet';
+
+          if (lic.status === 'active' && dev && dev.status === 'active') {
+            const lastSeen = dev.last_seen_at ? new Date(dev.last_seen_at).getTime() : 0;
+            const diffSeconds = (now.getTime() - lastSeen) / 1000;
+
+            // Heartbeat sent within last 60s means app is online
+            if (diffSeconds <= 60) {
+              const latestTokenTime = tokenData?.latestAt ? new Date(tokenData.latestAt).getTime() : 0;
+              const tokenDiffSeconds = (now.getTime() - latestTokenTime) / 1000;
+
+              // If Gemini tokens consumed within last 3 minutes, client is translating
+              if (tokenDiffSeconds <= 180 && tokensToday > 0) {
+                state = 'translating';
+                burnRate = Math.min(300, Math.max(90, Math.round(tokensToday / 120)));
+                currentTask = tokenData?.latestTask || 'Active Gemini AI Stream';
+              } else {
+                state = 'online';
+                currentTask = 'Dubber App Standby (Ready)';
+              }
+            }
+          }
+
+          return {
+            id: lic.id,
+            name: lic.customer_name || 'Unnamed Client',
+            email: lic.customer_email || 'No email registered',
+            licenseKey: lic.license_key,
+            maskedKey: maskLicenseKey(lic.license_key),
+            state,
+            tokensToday,
+            burnRate,
+            currentTask,
+            deviceId: dev?.device_id || 'Unbound',
+            expiresAt: lic.expires_at,
+            status: lic.status,
+            lastSeenAt: dev?.last_seen_at || null,
+          };
+        });
+
+        setLiveUsers(mappedUsers);
+      }
+
+      if (activations) {
+        setRecentActivations(activations);
+      }
+
+      setLastSyncedTime(new Date().toLocaleTimeString());
+    } catch (err) {
+      console.error('Failed to load real database metrics:', err);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
   }, []);
 
-  // Dynamic calculations
+  // Initial load
+  useEffect(() => {
+    fetchRealData();
+  }, [fetchRealData]);
+
+  // Real-time Supabase Postgres Changes Subscription
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Listen to changes in devices (heartbeats/activations)
+    const deviceSub = supabase
+      .channel('realtime:devices')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, () => {
+        fetchRealData();
+      })
+      .subscribe();
+
+    // Listen to changes in licenses
+    const licenseSub = supabase
+      .channel('realtime:licenses')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'licenses' }, () => {
+        fetchRealData();
+      })
+      .subscribe();
+
+    // Listen to changes in token_usages
+    const tokenSub = supabase
+      .channel('realtime:token_usages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'token_usages' }, () => {
+        fetchRealData();
+      })
+      .subscribe();
+
+    // Polling interval every 8 seconds to ensure state stays in sync
+    const pollInterval = setInterval(() => {
+      fetchRealData();
+    }, 8000);
+
+    return () => {
+      supabase.removeChannel(deviceSub);
+      supabase.removeChannel(licenseSub);
+      supabase.removeChannel(tokenSub);
+      clearInterval(pollInterval);
+    };
+  }, [fetchRealData]);
+
+  // Dynamic calculations based exclusively on real fetched data
   const totalTokensToday = useMemo(
     () => liveUsers.reduce((sum, u) => sum + u.tokensToday, 0),
     [liveUsers]
@@ -338,15 +331,6 @@ export default function AdminDashboardPage() {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const switchUserState = (id: string, newState: 'translating' | 'online' | 'offline') => {
-    setLiveUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, state: newState } : u))
-    );
-    if (selectedUser && selectedUser.id === id) {
-      setSelectedUser((prev) => (prev ? { ...prev, state: newState } : null));
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* ACTION REQUIRED BANNER */}
@@ -372,21 +356,35 @@ export default function AdminDashboardPage() {
               <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></span>
               <span className="text-xs font-bold text-amber-200">SNA GOD AI Energy Conduit</span>
               <span className="text-[11px] font-mono text-slate-400">• {totalBurnRate} tok/s</span>
+              {lastSyncedTime && (
+                <span className="text-[10px] text-slate-500 ml-1">Synced {lastSyncedTime}</span>
+              )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-[11px] bg-slate-950/85 px-3 py-1.5 rounded-xl border border-slate-800">
-              <span className="flex items-center gap-1.5 text-emerald-300 font-semibold">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981] animate-pulse"></span>
-                <span>⚡ កំពុង Translate AI (មានចរន្ត)</span>
-              </span>
-              <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>🟢 កំពុងប្រើ (App Open)</span>
-              </span>
-              <span className="flex items-center gap-1.5 text-slate-400 font-medium">
-                <span className="w-2 h-2 rounded-full bg-slate-500"></span>
-                <span>⚫ មិនទាន់ប្រើ</span>
-              </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchRealData(true)}
+                disabled={isRefreshing}
+                className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition disabled:opacity-50"
+                title="Refresh Real Database"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
+
+              <div className="flex flex-wrap items-center gap-3 text-[11px] bg-slate-950/85 px-3 py-1.5 rounded-xl border border-slate-800">
+                <span className="flex items-center gap-1.5 text-emerald-300 font-semibold">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981] animate-pulse"></span>
+                  <span>⚡ កំពុង Translate AI (មានចរន្ត)</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>🟢 កំពុងប្រើ (App Open)</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-slate-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                  <span>⚫ មិនទាន់ប្រើ</span>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -488,7 +486,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* USER NODES LAYER */}
+              {/* REAL USER NODES LAYER */}
               <div className="absolute inset-0 z-20">
                 {liveUsers.map((user, idx) => {
                   const { x: ux, y: uy } = getHubCoordinates(idx, liveUsers.length);
@@ -541,7 +539,7 @@ export default function AdminDashboardPage() {
                 })}
               </div>
 
-              {/* USER CONTROL POPOVER MODAL */}
+              {/* USER DETAILS POPOVER */}
               {selectedUser && (
                 <div className="absolute z-40 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 glass-panel rounded-2xl p-4 border border-emerald-400/50 shadow-2xl">
                   <div className="flex items-start justify-between gap-2 mb-2.5">
@@ -574,44 +572,35 @@ export default function AdminDashboardPage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Token ថ្ងៃនេះ:</span>
+                      <span className="text-slate-400">Gemini Token ថ្ងៃនេះ:</span>
                       <span className="font-mono font-extrabold text-amber-300">{selectedUser.tokensToday.toLocaleString()} Tokens</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Device ID:</span>
                       <span className="font-mono text-slate-300 truncate max-w-[165px]">{selectedUser.deviceId}</span>
                     </div>
+                    {selectedUser.lastSeenAt && (
+                      <div className="flex items-center justify-between text-[10px] text-slate-500">
+                        <span>Last Heartbeat:</span>
+                        <span>{formatDate(selectedUser.lastSeenAt)}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
-                    <div className="text-[10px] text-slate-400 font-semibold">Switch Live State:</div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        onClick={() => switchUserState(selectedUser.id, 'translating')}
-                        className="px-2 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/45 hover:bg-emerald-500/35 transition"
-                      >
-                        ⚡ Translate AI
-                      </button>
-                      <button
-                        onClick={() => switchUserState(selectedUser.id, 'online')}
-                        className="px-2 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-600/20 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-600/35 transition"
-                      >
-                        🟢 កំពុងប្រើ
-                      </button>
-                      <button
-                        onClick={() => switchUserState(selectedUser.id, 'offline')}
-                        className="px-2 py-1.5 rounded-xl text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-600 hover:bg-slate-700 transition"
-                      >
-                        ⚫ បិទ
-                      </button>
-                    </div>
                     <button
                       onClick={() => copyKeyToClipboard(selectedUser.licenseKey)}
-                      className="w-full mt-1 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 hover:bg-indigo-500/30 transition flex items-center justify-center gap-1.5"
+                      className="w-full py-2 rounded-xl text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 hover:bg-indigo-500/30 transition flex items-center justify-center gap-1.5"
                     >
                       {copiedKey === selectedUser.licenseKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedKey === selectedUser.licenseKey ? 'Copied Full Key!' : 'Copy Full License Key'}</span>
                     </button>
+                    <Link
+                      href={`/admin/licenses/${selectedUser.id}`}
+                      className="w-full py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition flex items-center justify-center"
+                    >
+                      Manage License Details →
+                    </Link>
                   </div>
                 </div>
               )}
@@ -625,7 +614,7 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
               <div>
                 <h2 className="font-bold text-sm sm:text-base text-white leading-tight">Users &amp; Daily Token Usage</h2>
-                <p className="text-[11px] text-slate-400">ការប្រើប្រាស់ Token ថ្ងៃនេះតាម User នីមួយៗ</p>
+                <p className="text-[11px] text-slate-400">ការប្រើប្រាស់ Gemini Token ថ្ងៃនេះពី Database ផ្ទាល់</p>
               </div>
               <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/35">
                 {onlineUsersCount} / {liveUsers.length} កំពុងប្រើ
@@ -662,96 +651,83 @@ export default function AdminDashboardPage() {
 
             {/* User List */}
             <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
-              {filteredLeaderboard.map((user) => {
-                const pct = Math.min(100, Math.round((user.tokensToday / maxTokens) * 100));
-                const isHeavy = user.tokensToday >= 200000;
+              {filteredLeaderboard.length > 0 ? (
+                filteredLeaderboard.map((user) => {
+                  const pct = Math.min(100, Math.round((user.tokensToday / maxTokens) * 100));
+                  const isHeavy = user.tokensToday >= 200000;
 
-                return (
-                  <div
-                    key={user.id}
-                    className={`p-3 rounded-xl bg-slate-950/75 hover:bg-slate-900/95 border transition space-y-2 ${user.state === 'translating' ? 'border-emerald-500/35' : 'border-slate-800'}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${user.state === 'offline' ? 'bg-slate-800 text-slate-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-400/40'}`}>
-                          {user.name.slice(0, 2).toUpperCase()}
+                  return (
+                    <div
+                      key={user.id}
+                      className={`p-3 rounded-xl bg-slate-950/75 hover:bg-slate-900/95 border transition space-y-2 ${user.state === 'translating' ? 'border-emerald-500/35' : 'border-slate-800'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${user.state === 'offline' ? 'bg-slate-800 text-slate-400' : 'bg-emerald-950 text-emerald-300 border border-emerald-400/40'}`}>
+                            {user.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-white truncate">{user.name}</div>
+                            <div className="text-[10px] font-mono text-indigo-300 truncate">{user.maskedKey}</div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-white truncate">{user.name}</div>
-                          <div className="text-[10px] font-mono text-indigo-300 truncate">{user.maskedKey}</div>
-                        </div>
-                      </div>
-                      {user.state === 'translating' ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/45 animate-pulse">
-                          ⚡ កំពុង Translate AI
-                        </span>
-                      ) : user.state === 'online' ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/35">
-                          🟢 កំពុងប្រើ
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
-                          ⚫ មិនទាន់ប្រើ
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-400">Token ថ្ងៃនេះ:</span>
-                        <div className="flex items-center gap-1.5">
-                          {user.state === 'translating' && (
-                            <span className="text-[10px] font-mono font-bold text-emerald-400">+{user.burnRate} tok/s</span>
-                          )}
-                          <span className={`font-mono font-extrabold ${isHeavy ? 'text-amber-300' : 'text-slate-200'}`}>
-                            {user.tokensToday.toLocaleString()} tokens
+                        {user.state === 'translating' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/45 animate-pulse">
+                            ⚡ Translate AI
                           </span>
+                        ) : user.state === 'online' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/35">
+                            🟢 កំពុងប្រើ
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                            ⚫ មិនទាន់ប្រើ
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">Gemini Token ថ្ងៃនេះ:</span>
+                          <div className="flex items-center gap-1.5">
+                            {user.state === 'translating' && (
+                              <span className="text-[10px] font-mono font-bold text-emerald-400">+{user.burnRate} tok/s</span>
+                            )}
+                            <span className={`font-mono font-extrabold ${isHeavy ? 'text-amber-300' : 'text-slate-200'}`}>
+                              {user.tokensToday.toLocaleString()} tokens
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${user.state === 'translating' ? 'bg-gradient-to-r from-emerald-500 to-amber-400' : isHeavy ? 'bg-amber-400' : user.state === 'online' ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                       </div>
-                      <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${user.state === 'translating' ? 'bg-gradient-to-r from-emerald-500 to-amber-400' : isHeavy ? 'bg-amber-400' : user.state === 'online' ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
 
-                    <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-800/80">
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-800/80">
+                        <span className="text-[10px] text-slate-500 truncate max-w-[170px]">{user.currentTask}</span>
                         <button
-                          onClick={() => switchUserState(user.id, 'translating')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${user.state === 'translating' ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-800 text-emerald-300 hover:bg-slate-700'}`}
+                          onClick={() => copyKeyToClipboard(user.licenseKey)}
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 transition"
                         >
-                          ⚡ AI
-                        </button>
-                        <button
-                          onClick={() => switchUserState(user.id, 'online')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${user.state === 'online' ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-800 text-emerald-200 hover:bg-slate-700'}`}
-                        >
-                          🟢 បើក
-                        </button>
-                        <button
-                          onClick={() => switchUserState(user.id, 'offline')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${user.state === 'offline' ? 'bg-slate-600 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
-                        >
-                          ⚫ បិទ
+                          {copiedKey === user.licenseKey ? 'Copied' : 'Copy Key'}
                         </button>
                       </div>
-                      <button
-                        onClick={() => copyKeyToClipboard(user.licenseKey)}
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 transition"
-                      >
-                        {copiedKey === user.licenseKey ? 'Copied' : 'Copy Key'}
-                      </button>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="text-center py-8 text-xs text-slate-500">
+                  គ្មាន User ក្នុង Database ត្រូវនឹង Filter នេះទេ។
+                </div>
+              )}
             </div>
           </div>
 
           <div className="mt-3 pt-2.5 px-3 py-2 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400">សរុប Token ប្រើប្រាស់ថ្ងៃនេះ:</span>
+            <span className="text-slate-400">សរុប Gemini Token ថ្ងៃនេះ:</span>
             <span className="font-mono font-extrabold text-amber-300">{totalTokensToday.toLocaleString()} tokens</span>
           </div>
         </div>
@@ -762,7 +738,7 @@ export default function AdminDashboardPage() {
         <div>
           <h2 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">System Overview</h2>
           <p className="text-xs text-slate-400">
-            Real-time status of software licenses, green online users, AI current streams, and daily token burn.
+            Real-time status of software licenses, green online users, AI current streams, and daily token burn directly from Supabase.
           </p>
         </div>
 
@@ -770,8 +746,8 @@ export default function AdminDashboardPage() {
           <div className="glass-panel glass-panel-hover rounded-2xl p-4 sm:p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-slate-400">Total Licenses</p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-white my-1">{stats.totalLicenses || liveUsers.length}</p>
-              <p className="text-xs text-slate-400">Issued keys</p>
+              <p className="text-2xl sm:text-3xl font-extrabold text-white my-1">{stats.totalLicenses}</p>
+              <p className="text-xs text-slate-400">Issued keys in DB</p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400">
               <KeyRound className="w-5 h-5" />
@@ -782,7 +758,7 @@ export default function AdminDashboardPage() {
             <div>
               <p className="text-xs font-medium text-slate-400">Active / Online Users</p>
               <p className="text-2xl sm:text-3xl font-extrabold text-emerald-400 my-1">{onlineUsersCount}</p>
-              <p className="text-xs text-emerald-300 font-semibold">កំពុងប្រើ (ពណ៌បៃតង)</p>
+              <p className="text-xs text-emerald-300 font-semibold">កំពុងប្រើ (Heartbeat OK)</p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-400/35 flex items-center justify-center text-emerald-400">
               <CheckCircle2 className="w-5 h-5" />
@@ -793,7 +769,7 @@ export default function AdminDashboardPage() {
             <div>
               <p className="text-xs font-medium text-slate-400">Active AI Streams</p>
               <p className="text-2xl sm:text-3xl font-extrabold text-white my-1">{activeStreamsCount}</p>
-              <p className="text-xs font-mono text-emerald-300 font-semibold">⚡ +{totalBurnRate} tok/s live</p>
+              <p className="text-xs font-mono text-emerald-300 font-semibold">⚡ +{totalBurnRate} tok/s</p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300">
               <Zap className="w-5 h-5" />
@@ -804,7 +780,7 @@ export default function AdminDashboardPage() {
             <div>
               <p className="text-xs font-medium text-slate-400">Today&apos;s Total Tokens</p>
               <p className="font-mono text-xl sm:text-2xl font-extrabold text-amber-300 my-1.5">{totalTokensToday.toLocaleString()}</p>
-              <p className="text-xs text-amber-200/80">Token ប្រើសរុបថ្ងៃនេះ</p>
+              <p className="text-xs text-amber-200/80">Gemini API Consumption</p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-400/35 flex items-center justify-center text-amber-400">
               <Coins className="w-5 h-5" />
@@ -826,7 +802,7 @@ export default function AdminDashboardPage() {
 
       {/* BOTTOM ROW: RECENTLY CREATED LICENSES (8 COLS) + LIVE CLIENT ACTIVITY (4 COLS) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Table */}
+        {/* Real Licenses Table */}
         <div className="lg:col-span-8 glass-panel rounded-2xl p-4 sm:p-5">
           <div className="flex items-center justify-between pb-3.5 mb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
@@ -852,75 +828,87 @@ export default function AdminDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/70">
-                {liveUsers.slice(0, 5).map((user) => {
-                  const isRevealed = revealedKeys[user.id];
-                  return (
-                    <tr key={user.id} className="hover:bg-slate-800/35 transition">
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-indigo-300">
-                            {isRevealed ? user.licenseKey : user.maskedKey}
-                          </span>
-                          <button
-                            onClick={() => toggleRevealKey(user.id)}
-                            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
-                            title="Show/Hide Key"
+                {recentLicenses.length > 0 ? (
+                  recentLicenses.map((lic) => {
+                    const userMatch = liveUsers.find((u) => u.id === lic.id);
+                    const tokens = userMatch?.tokensToday || 0;
+                    const state = userMatch?.state || (lic.status === 'active' ? 'online' : 'offline');
+                    const isRevealed = revealedKeys[lic.id];
+
+                    return (
+                      <tr key={lic.id} className="hover:bg-slate-800/35 transition">
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-indigo-300">
+                              {isRevealed ? lic.license_key : maskLicenseKey(lic.license_key)}
+                            </span>
+                            <button
+                              onClick={() => toggleRevealKey(lic.id)}
+                              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                              title="Show/Hide Key"
+                            >
+                              {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => copyKeyToClipboard(lic.license_key)}
+                              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                              title="Copy Key"
+                            >
+                              {copiedKey === lic.license_key ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-white">{lic.customer_name || 'Anonymous'}</div>
+                          <div className="text-[11px] text-slate-400">{lic.customer_email || 'No email'}</div>
+                        </td>
+                        <td className="py-3 px-3 min-w-[130px]">
+                          <div className="font-mono font-bold text-amber-300">{tokens.toLocaleString()} tok</div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden mt-1">
+                            <div
+                              className={`h-full rounded-full ${state === 'translating' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                              style={{ width: `${Math.min(100, (tokens / maxTokens) * 100)}%` }}
+                            />
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          {state === 'translating' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/45">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                              ⚡ Translate AI
+                            </span>
+                          ) : state === 'online' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/35">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                              🟢 កំពុងប្រើ
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                              ⚫ មិនទាន់ប្រើ
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-slate-300">
+                          {lic.expires_at ? formatDate(lic.expires_at) : 'Lifetime'}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <Link
+                            href={`/admin/licenses/${lic.id}`}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-400/30 hover:bg-indigo-500/25 transition"
                           >
-                            {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                          <button
-                            onClick={() => copyKeyToClipboard(user.licenseKey)}
-                            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
-                            title="Copy Key"
-                          >
-                            {copiedKey === user.licenseKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-white">{user.name}</div>
-                        <div className="text-[11px] text-slate-400">{user.email}</div>
-                      </td>
-                      <td className="py-3 px-3 min-w-[130px]">
-                        <div className="font-mono font-bold text-amber-300">{user.tokensToday.toLocaleString()} tok</div>
-                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden mt-1">
-                          <div
-                            className={`h-full rounded-full ${user.state === 'translating' ? 'bg-emerald-400' : 'bg-amber-400'}`}
-                            style={{ width: `${Math.min(100, (user.tokensToday / maxTokens) * 100)}%` }}
-                          />
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        {user.state === 'translating' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/45">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                            ⚡ Translate AI
-                          </span>
-                        ) : user.state === 'online' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/35">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                            🟢 កំពុងប្រើ
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
-                            ⚫ មិនទាន់ប្រើ
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-slate-300">
-                        {user.expiresAt ? formatDate(user.expiresAt) : 'Lifetime'}
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <Link
-                          href={`/admin/licenses/${user.id}`}
-                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-400/30 hover:bg-indigo-500/25 transition"
-                        >
-                          Details
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            Details
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400 font-khmer">
+                      មិនមានទិន្នន័យ License ក្នុង Database ទេ។
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -940,61 +928,43 @@ export default function AdminDashboardPage() {
 
           <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
             {recentActivations.length > 0 ? (
-              recentActivations.map((act) => (
-                <div
-                  key={act.id}
-                  className="p-2.5 rounded-xl bg-slate-950/75 border border-slate-800/90 flex items-start justify-between gap-2.5"
-                >
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg border bg-sky-500/15 text-sky-300 border-sky-400/30 flex items-center justify-center shrink-0 mt-0.5">
-                      <Laptop2 className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-white capitalize">{act.action}</span>
-                        <span className="text-[10px] font-semibold text-sky-300">• Verified</span>
+              recentActivations.map((act) => {
+                const isHeartbeat = act.action === 'heartbeat';
+                const isActivate = act.action === 'activate';
+                return (
+                  <div
+                    key={act.id}
+                    className="p-2.5 rounded-xl bg-slate-950/75 border border-slate-800/90 flex items-start justify-between gap-2.5"
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <div
+                        className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${
+                          isHeartbeat
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                            : isActivate
+                            ? 'bg-sky-500/15 text-sky-300 border-sky-400/30'
+                            : 'bg-rose-500/15 text-rose-300 border-rose-400/30'
+                        }`}
+                      >
+                        {isHeartbeat ? <Zap className="w-4 h-4" /> : <Laptop2 className="w-4 h-4" />}
                       </div>
-                      <div className="text-[11px] text-slate-300 truncate font-mono">{act.device_id || 'PC Device'}</div>
-                      <div className="text-[10px] text-slate-500">{formatDate(act.created_at)}</div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-white capitalize">{act.action}</span>
+                          <span className="text-[10px] font-semibold text-emerald-400">
+                            • {act.licenses?.customer_name || 'Verified'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-300 truncate font-mono">{act.device_id || 'PC Device'}</div>
+                        <div className="text-[10px] text-slate-500">{formatDate(act.created_at)}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
-              <div className="space-y-2.5">
-                <div className="p-2.5 rounded-xl bg-slate-950/75 border border-slate-800/90 flex items-start justify-between gap-2.5">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg border bg-emerald-500/20 text-emerald-300 border-emerald-400/40 flex items-center justify-center shrink-0 mt-0.5">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-white">Rithy Chan</span>
-                        <span className="text-[10px] font-semibold text-emerald-400">• AI Translate</span>
-                      </div>
-                      <div className="text-[11px] text-slate-300 truncate">AI Translate Burst (+2,100 tokens)</div>
-                      <div className="text-[10px] font-mono text-slate-500">DEV-3E19C047B8124D5590AAE412</div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-400">09:42</span>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-slate-950/75 border border-slate-800/90 flex items-start justify-between gap-2.5">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg border bg-emerald-500/20 text-emerald-300 border-emerald-400/40 flex items-center justify-center shrink-0 mt-0.5">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-white">Limthong</span>
-                        <span className="text-[10px] font-semibold text-emerald-400">• AI Translate</span>
-                      </div>
-                      <div className="text-[11px] text-slate-300 truncate">Translating EP.14 (ZH→KM)</div>
-                      <div className="text-[10px] font-mono text-slate-500">DEV-9A4D414A1F308E1141DFB327</div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-400">09:41</span>
-                </div>
+              <div className="text-center py-8 text-xs text-slate-500">
+                មិនទាន់មានសកម្មភាព Client Activity ក្នុង Database ទេ។
               </div>
             )}
           </div>
