@@ -23,7 +23,6 @@ $iss = "D:\Project\Release_v1.2.0\Management-Tools\installer\setup.iss"
 & $iscc $iss
 if ($LASTEXITCODE -eq 0) {
     $out = Join-Path $outputDir "ToolDubber-Setup-v2.1.1.exe"
-    Copy-Item $out "C:\Users\song.veasna.MAM\Downloads\ToolDubber-Setup-v2.1.1.exe" -Force
     $h = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
     $sz = (Get-Item $out).Length
     Write-Host "EXE_SHA256=$h"
