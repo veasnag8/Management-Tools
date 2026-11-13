@@ -487,28 +487,355 @@ public static class Hook
 		}
 	}
 
+	private static string GetGeminiKeysPoolFilePath()
+	{
+		string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber");
+		Directory.CreateDirectory(folder);
+		return Path.Combine(folder, "gemini_api_keys.txt");
+	}
+
+	public static List<string> LoadGeminiApiKeys()
+	{
+		List<string> keys = new List<string>();
+		try
+		{
+			string poolPath = GetGeminiKeysPoolFilePath();
+			if (File.Exists(poolPath))
+			{
+				string[] lines = File.ReadAllLines(poolPath);
+				foreach (string line in lines)
+				{
+					string clean = line.Trim().Trim('"', '\'', '`');
+					if (!string.IsNullOrWhiteSpace(clean) && !clean.StartsWith("#") && clean.Length > 10 && !keys.Contains(clean))
+					{
+						keys.Add(clean);
+					}
+				}
+			}
+
+			// Fallback to single key file if pool empty
+			if (keys.Count == 0)
+			{
+				string singlePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "gemini_api_key.txt");
+				if (File.Exists(singlePath))
+				{
+					string single = File.ReadAllText(singlePath).Trim().Trim('"', '\'', '`');
+					if (!string.IsNullOrWhiteSpace(single) && single.Length > 10 && !keys.Contains(single))
+					{
+						keys.Add(single);
+					}
+				}
+			}
+
+			// Fallback to environment variable
+			if (keys.Count == 0)
+			{
+				string env = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
+				string[] parts = env.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+				foreach (string p in parts)
+				{
+					string clean = p.Trim().Trim('"', '\'', '`');
+					if (!string.IsNullOrWhiteSpace(clean) && clean.Length > 10 && !keys.Contains(clean))
+					{
+						keys.Add(clean);
+					}
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Log("LoadGeminiApiKeys error: " + ex.Message);
+		}
+		return keys;
+	}
+
+	public static void SaveGeminiApiKeys(IEnumerable<string> keys)
+	{
+		try
+		{
+			List<string> cleaned = new List<string>();
+			foreach (var k in keys)
+			{
+				string clean = (k ?? "").Trim().Trim('"', '\'', '`');
+				if (!string.IsNullOrWhiteSpace(clean) && clean.Length > 10 && !cleaned.Contains(clean))
+				{
+					cleaned.Add(clean);
+				}
+			}
+
+			string poolPath = GetGeminiKeysPoolFilePath();
+			File.WriteAllLines(poolPath, cleaned, Encoding.UTF8);
+
+			string primary = cleaned.FirstOrDefault() ?? "";
+			string singlePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "gemini_api_key.txt");
+			File.WriteAllText(singlePath, primary, Encoding.UTF8);
+
+			Environment.SetEnvironmentVariable("GEMINI_API_KEY", string.Join(",", cleaned), EnvironmentVariableTarget.Process);
+			try
+			{
+				Environment.SetEnvironmentVariable("GEMINI_API_KEY", string.Join(",", cleaned), EnvironmentVariableTarget.User);
+			}
+			catch { }
+			Log($"Successfully saved {cleaned.Count} Gemini API keys to pool storage.");
+		}
+		catch (Exception ex)
+		{
+			Log("SaveGeminiApiKeys error: " + ex.Message);
+		}
+	}
+
+	private static async Task PostTokenTelemetryAsync(int totalTokens, int promptTokens = 0, int completionTokens = 0, string modelName = "gemini-2.5-flash", int keysCount = 1)
+	{
+		try
+		{
+			StoredLicenseSession session = new SecureStorageService().LoadSession();
+			string licenseKey = session?.LicenseKey ?? "";
+			string deviceId = "";
+			string deviceToken = "";
+
+			if (session != null)
+			{
+				try
+				{
+					deviceId = session.GetType().GetProperty("DeviceId")?.GetValue(session) as string ?? "";
+					deviceToken = session.GetType().GetProperty("DeviceToken")?.GetValue(session) as string ?? "";
+				}
+				catch { }
+			}
+
+			if (string.IsNullOrWhiteSpace(licenseKey) && string.IsNullOrWhiteSpace(deviceToken))
+			{
+				Log("PostTokenTelemetryAsync skipped: No active session.");
+				return;
+			}
+
+			string endpoint = "https://license-api.veasnag8.workers.dev/v1/telemetry";
+			using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+			if (!string.IsNullOrWhiteSpace(deviceToken))
+			{
+				client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", deviceToken);
+			}
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.0");
+
+			var payload = new
+			{
+				tokens = totalTokens,
+				prompt_tokens = promptTokens,
+				completion_tokens = completionTokens,
+				model_name = string.IsNullOrEmpty(modelName) ? "gemini-2.5-flash" : modelName,
+				task_type = "translate",
+				task_description = $"Gemini AI Translation ({keysCount} Key Pool)",
+				active_keys_count = keysCount,
+				license_key = licenseKey,
+				device_id = deviceId
+			};
+
+			string json = JsonSerializer.Serialize(payload);
+			using var content = new StringContent(json, Encoding.UTF8, "application/json");
+			using var resp = await client.PostAsync(endpoint, content);
+			if (resp.IsSuccessStatusCode)
+			{
+				Log($"PostTokenTelemetryAsync success: Recorded {totalTokens} tokens with {keysCount} keys to Supabase.");
+			}
+			else
+			{
+				string err = await resp.Content.ReadAsStringAsync();
+				Log($"PostTokenTelemetryAsync warning ({resp.StatusCode}): {err}");
+			}
+		}
+		catch (Exception ex)
+		{
+			Log("PostTokenTelemetryAsync error: " + ex.Message);
+		}
+	}
+
+	public static void ShowGeminiKeyPoolDialog(Window owner, MainViewModel vm)
+	{
+		try
+		{
+			Window dialog = new Window
+			{
+				Title = "🔑 Gemini API Multi-Key Pool Manager",
+				Width = 560,
+				Height = 520,
+				WindowStartupLocation = WindowStartupLocation.CenterOwner,
+				Owner = owner,
+				ResizeMode = ResizeMode.NoResize,
+				Background = new SolidColorBrush(Color.FromRgb(10, 15, 29)),
+				Foreground = Brushes.White,
+				WindowStyle = WindowStyle.SingleBorderWindow
+			};
+
+			Border root = new Border
+			{
+				Padding = new Thickness(24),
+				Background = new LinearGradientBrush(
+					Color.FromRgb(13, 20, 38),
+					Color.FromRgb(7, 10, 19),
+					90)
+			};
+
+			StackPanel panel = new StackPanel();
+
+			Border badge = new Border
+			{
+				Background = new SolidColorBrush(Color.FromArgb(40, 245, 158, 11)),
+				BorderBrush = new SolidColorBrush(Color.FromArgb(90, 245, 158, 11)),
+				BorderThickness = new Thickness(1),
+				CornerRadius = new CornerRadius(12),
+				Padding = new Thickness(10, 4, 10, 4),
+				HorizontalAlignment = HorizontalAlignment.Left,
+				Margin = new Thickness(0, 0, 0, 10)
+			};
+			badge.Child = new TextBlock
+			{
+				Text = "⚡ MULTI-KEY QUOTA & TOKEN MULTIPLIER",
+				FontSize = 10.5,
+				FontWeight = FontWeights.Bold,
+				Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36))
+			};
+			panel.Children.Add(badge);
+
+			TextBlock title = new TextBlock
+			{
+				Text = "Gemini API Keys Manager",
+				FontSize = 18,
+				FontWeight = FontWeights.Bold,
+				Foreground = Brushes.White,
+				Margin = new Thickness(0, 0, 0, 4)
+			};
+			panel.Children.Add(title);
+
+			TextBlock desc = new TextBlock
+			{
+				Text = "បញ្ចូល API Keys បានច្រើន (១បន្ទាត់ = ១ Key) ដើម្បីទទួលបាន Token ច្រើន និងការពារកុំឱ្យជាប់ Quota (429)។ ប្រព័ន្ធនឹងបង្វិលប្រើ Keys ឆ្លាស់គ្នា (Round-Robin) និងស្ទុះប្តូរដោយស្វ័យប្រវត្តពេល Key មួយអស់ Quota។",
+				FontSize = 11.5,
+				Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+				TextWrapping = TextWrapping.Wrap,
+				Margin = new Thickness(0, 0, 0, 14),
+				LineHeight = 18
+			};
+			panel.Children.Add(desc);
+
+			List<string> currentKeys = LoadGeminiApiKeys();
+
+			TextBlock countLabel = new TextBlock
+			{
+				Text = $"🔑 បច្ចុប្បន្នមាន: {currentKeys.Count} Keys ក្នុង Pool",
+				FontSize = 11.5,
+				FontWeight = FontWeights.SemiBold,
+				Foreground = currentKeys.Count > 0 ? new SolidColorBrush(Color.FromRgb(52, 211, 153)) : new SolidColorBrush(Color.FromRgb(248, 113, 113)),
+				Margin = new Thickness(0, 0, 0, 6)
+			};
+			panel.Children.Add(countLabel);
+
+			TextBox keysBox = new TextBox
+			{
+				Height = 160,
+				AcceptsReturn = true,
+				VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+				TextWrapping = TextWrapping.NoWrap,
+				FontFamily = new FontFamily("Consolas, Courier New, monospace"),
+				FontSize = 11.5,
+				Padding = new Thickness(10),
+				Background = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
+				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+				BorderThickness = new Thickness(1.2),
+				Text = string.Join(Environment.NewLine, currentKeys)
+			};
+			keysBox.TextChanged += (s, e) =>
+			{
+				string[] lines = keysBox.Text.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+				int c = lines.Select(l => l.Trim().Trim('"', '\'', '`')).Count(l => !string.IsNullOrWhiteSpace(l) && !l.StartsWith("#") && l.Length > 10);
+				countLabel.Text = $"🔑 បច្ចុប្បន្នមាន: {c} Keys ក្នុង Pool";
+				countLabel.Foreground = c > 0 ? new SolidColorBrush(Color.FromRgb(52, 211, 153)) : new SolidColorBrush(Color.FromRgb(248, 113, 113));
+			};
+			panel.Children.Add(keysBox);
+
+			TextBlock statusMsg = new TextBlock
+			{
+				FontSize = 11,
+				Margin = new Thickness(0, 8, 0, 16),
+				TextWrapping = TextWrapping.Wrap
+			};
+			panel.Children.Add(statusMsg);
+
+			StackPanel btnRow = new StackPanel
+			{
+				Orientation = Orientation.Horizontal,
+				HorizontalAlignment = HorizontalAlignment.Right
+			};
+
+			Button testBtn = CreateTimelineToolButton("🧪 ពិនិត្យ Keys", "Validate and count keys");
+			testBtn.Padding = new Thickness(12, 7, 12, 7);
+			testBtn.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
+			testBtn.Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225));
+			testBtn.Margin = new Thickness(0, 0, 8, 0);
+			testBtn.Click += (s, e) =>
+			{
+				string[] lines = keysBox.Text.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+				var valid = lines.Select(l => l.Trim().Trim('"', '\'', '`')).Where(l => !string.IsNullOrWhiteSpace(l) && !l.StartsWith("#") && l.Length > 10).Distinct().ToList();
+				if (valid.Count == 0)
+				{
+					statusMsg.Text = "⚠️ មិនទាន់មាន Key ត្រឹមត្រូវនៅឡើយទេ។ សូមពិនិត្យមើលម្ដងទៀត។";
+					statusMsg.Foreground = Brushes.Orange;
+				}
+				else
+				{
+					statusMsg.Text = $"✓ រកឃើញ {valid.Count} Keys ត្រឹមត្រូវ! កម្លាំង Token: ~{valid.Count * 15} Requests/នាទី, រាប់លាន Tokens/ថ្ងៃ។";
+					statusMsg.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+				}
+			};
+
+			Button saveBtn = CreateTimelineToolButton("💾 រក្សាទុក Keys Pool", "Save all keys to local secure storage");
+			saveBtn.Padding = new Thickness(14, 7, 14, 7);
+			saveBtn.Background = new LinearGradientBrush(Color.FromRgb(2, 132, 199), Color.FromRgb(14, 165, 233), 45);
+			saveBtn.Foreground = Brushes.White;
+			saveBtn.FontWeight = FontWeights.Bold;
+			saveBtn.Margin = new Thickness(0, 0, 8, 0);
+			saveBtn.Click += (s, e) =>
+			{
+				string[] lines = keysBox.Text.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+				var valid = lines.Select(l => l.Trim().Trim('"', '\'', '`')).Where(l => !string.IsNullOrWhiteSpace(l) && !l.StartsWith("#") && l.Length > 10).Distinct().ToList();
+				SaveGeminiApiKeys(valid);
+				statusMsg.Text = $"✓ បានរក្សាទុក {valid.Count} Keys ទៅក្នុង Pool ដោយជោគជ័យ!";
+				statusMsg.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+				dialog.Close();
+			};
+
+			Button closeBtn = CreateTimelineToolButton("បិទ", "Close");
+			closeBtn.Padding = new Thickness(12, 7, 12, 7);
+			closeBtn.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
+			closeBtn.Foreground = Brushes.White;
+			closeBtn.Click += (s, e) => dialog.Close();
+
+			btnRow.Children.Add(testBtn);
+			btnRow.Children.Add(saveBtn);
+			btnRow.Children.Add(closeBtn);
+			panel.Children.Add(btnRow);
+
+			root.Child = panel;
+			dialog.Content = root;
+			dialog.ShowDialog();
+		}
+		catch (Exception ex)
+		{
+			Log("ShowGeminiKeyPoolDialog error: " + ex.Message);
+		}
+	}
+
 	private static void InitializeEnvironment()
 	{
 		try
 		{
-			string text = Environment.GetEnvironmentVariable("GEMINI_API_KEY", EnvironmentVariableTarget.Process) ?? "";
-			if (string.IsNullOrEmpty(text))
+			List<string> keys = LoadGeminiApiKeys();
+			if (keys.Count > 0)
 			{
-				text = Environment.GetEnvironmentVariable("GEMINI_API_KEY", EnvironmentVariableTarget.User) ?? "";
-			}
-			if (string.IsNullOrEmpty(text))
-			{
-				string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "gemini_api_key.txt");
-				if (File.Exists(path))
-				{
-					text = File.ReadAllText(path).Trim();
-				}
-			}
-			if (!string.IsNullOrEmpty(text))
-			{
-				Environment.SetEnvironmentVariable("GEMINI_API_KEY", text, EnvironmentVariableTarget.Process);
-				Environment.SetEnvironmentVariable("GEMINI_API_KEY", text, EnvironmentVariableTarget.User);
-				Log("Successfully initialized GEMINI_API_KEY from storage: " + text.Substring(0, Math.Min(8, text.Length)) + "...");
+				string primary = keys[0];
+				Environment.SetEnvironmentVariable("GEMINI_API_KEY", string.Join(",", keys), EnvironmentVariableTarget.Process);
+				try { Environment.SetEnvironmentVariable("GEMINI_API_KEY", string.Join(",", keys), EnvironmentVariableTarget.User); } catch { }
+				Log($"Successfully initialized GEMINI_API_KEY pool ({keys.Count} keys found). Primary: {primary.Substring(0, Math.Min(8, primary.Length))}...");
 			}
 		}
 		catch (Exception ex)
@@ -1426,7 +1753,14 @@ public static class Hook
 		};
 		panel.Children.Add(hint);
 		StackPanel buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-		Button retry = CreateTimelineToolButton("រក្សាទុក Key ថ្មី និងសាកម្ដងទៀត", "Save the new Gemini key and retry");
+		Button poolBtn = CreateTimelineToolButton("🔑 Multi-Key Pool Manager...", "Open Gemini Multi-Key Pool Manager");
+		poolBtn.Padding = new Thickness(10.0, 7.0, 10.0, 7.0);
+		poolBtn.Background = new SolidColorBrush(Color.FromRgb(24, 30, 48));
+		poolBtn.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+		poolBtn.Margin = new Thickness(0.0, 0.0, 8.0, 0.0);
+		poolBtn.Click += (s, e) => { ShowGeminiKeyPoolDialog(dialog, vm); result = "retry"; dialog.DialogResult = true; };
+
+		Button retry = CreateTimelineToolButton("រក្សាទុក Key & សាកម្ដងទៀត", "Save key and retry");
 		retry.Padding = new Thickness(12.0, 7.0, 12.0, 7.0);
 		retry.Background = new SolidColorBrush(Color.FromRgb(2, 132, 199));
 		Button ffmpeg = CreateTimelineToolButton("បន្តដោយ FFmpeg តែប៉ុណ្ណោះ", "Continue without Gemini");
@@ -1437,22 +1771,20 @@ public static class Hook
 		cancel.Margin = new Thickness(8.0, 0.0, 0.0, 0.0);
 		retry.Click += (object sender, RoutedEventArgs args) =>
 		{
-			string key = keyBox.Text.Trim();
-			if (string.IsNullOrWhiteSpace(key)) { hint.Text = "សូមបញ្ចូល API Key ថ្មីសិន។"; hint.Foreground = Brushes.Orange; return; }
+			string raw = keyBox.Text.Trim();
+			if (string.IsNullOrWhiteSpace(raw)) { hint.Text = "សូមបញ្ចូល API Key ថ្មីសិន។"; hint.Foreground = Brushes.Orange; return; }
 			try
 			{
-				Environment.SetEnvironmentVariable("GEMINI_API_KEY", key, EnvironmentVariableTarget.Process);
-				Environment.SetEnvironmentVariable("GEMINI_API_KEY", key, EnvironmentVariableTarget.User);
-				vm.GeminiApiKeyInput = key;
-				string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber");
-				Directory.CreateDirectory(folder);
-				File.WriteAllText(Path.Combine(folder, "gemini_api_key.txt"), key, Encoding.UTF8);
+				string[] parts = raw.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+				var valid = parts.Select(p => p.Trim().Trim('"', '\'', '`')).Where(p => !string.IsNullOrWhiteSpace(p) && p.Length > 10).Distinct().ToList();
+				SaveGeminiApiKeys(valid);
 				result = "retry"; dialog.DialogResult = true;
 			}
 			catch (Exception ex) { hint.Text = "រក្សាទុក Key មិនបាន៖ " + ex.Message; hint.Foreground = Brushes.OrangeRed; }
 		};
 		ffmpeg.Click += (object sender, RoutedEventArgs args) => { result = "ffmpeg"; dialog.DialogResult = true; };
 		cancel.Click += (object sender, RoutedEventArgs args) => { result = "cancel"; dialog.DialogResult = false; };
+		buttons.Children.Add(poolBtn);
 		buttons.Children.Add(retry); buttons.Children.Add(ffmpeg); buttons.Children.Add(cancel);
 		panel.Children.Add(buttons);
 		dialog.Content = panel;
@@ -2563,6 +2895,37 @@ public static class Hook
 			int idx = settingsBtn != null ? targetHost.Children.IndexOf(settingsBtn) : targetHost.Children.Count;
 			targetHost.Children.Insert(Math.Min(targetHost.Children.Count, Math.Max(0, idx)), updateBtn);
 
+			if (!targetHost.Children.OfType<Button>().Any(b => (b.Tag as string) == "GeminiKeysPoolButton"))
+			{
+				Button geminiKeysBtn = new Button
+				{
+					Tag = "GeminiKeysPoolButton",
+					Content = "🔑 Gemini Keys",
+					ToolTip = "Gemini API Multi-Key Pool Manager — Add multiple API keys to increase tokens and avoid rate limits",
+					Height = 32.0,
+					MinWidth = 115.0,
+					Margin = new Thickness(4.0, 0.0, 4.0, 0.0),
+					Cursor = Cursors.Hand,
+					Background = new SolidColorBrush(Color.FromRgb(24, 30, 48)),
+					BorderBrush = new SolidColorBrush(Color.FromRgb(245, 158, 11)),
+					BorderThickness = new Thickness(1.0),
+					Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36)),
+					FontWeight = FontWeights.SemiBold,
+					FontSize = 11.5,
+					Padding = new Thickness(10.0, 4.0, 10.0, 4.0),
+					VerticalAlignment = VerticalAlignment.Center
+				};
+				SetControlCornerRadius(geminiKeysBtn, 8);
+				AttachModernHover(geminiKeysBtn,
+					hoverBackground: new SolidColorBrush(Color.FromRgb(180, 83, 9)),
+					hoverBorder: new SolidColorBrush(Color.FromRgb(252, 211, 77)));
+
+				geminiKeysBtn.Click += (s, e) => ShowGeminiKeyPoolDialog(window, vm);
+
+				int gIdx = targetHost.Children.IndexOf(updateBtn);
+				targetHost.Children.Insert(Math.Min(targetHost.Children.Count, Math.Max(0, gIdx)), geminiKeysBtn);
+			}
+
 			if (settingsBtn != null)
 			{
 				ContextMenu cm = settingsBtn.ContextMenu ?? new ContextMenu();
@@ -2573,6 +2936,15 @@ public static class Hook
 				};
 				mi.Click += (s, e) => ShowAutoUpdateCenterDialog(window, vm);
 				cm.Items.Add(mi);
+
+				MenuItem geminiMi = new MenuItem
+				{
+					Header = "🔑 Gemini Keys (Multi-Key Pool)...",
+					FontWeight = FontWeights.SemiBold
+				};
+				geminiMi.Click += (s, e) => ShowGeminiKeyPoolDialog(window, vm);
+				cm.Items.Add(geminiMi);
+
 				settingsBtn.ContextMenu = cm;
 			}
 
@@ -5497,7 +5869,8 @@ del ""%~f0""
 			{
 				return false;
 			}
-			string api_key = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
+			List<string> keys = LoadGeminiApiKeys();
+			string api_key = keys.FirstOrDefault() ?? (Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "");
 			List<object> list = new List<object>();
 			foreach (DialogueLine line in lines)
 			{
@@ -5514,6 +5887,7 @@ del ""%~f0""
 			{
 				action = "translate",
 				api_key = api_key,
+				api_keys = keys,
 				context = "Movie Dialogue Dubbing",
 				model_name = "gemini-3.5-flash-lite",
 				dialogue = list
@@ -5583,6 +5957,28 @@ del ""%~f0""
 						}));
 					}
 				}
+
+				// Post real token telemetry to Supabase / License Worker
+				if (jsonDocument.RootElement.TryGetProperty("usage", out var usageElem))
+				{
+					try
+					{
+						int totalTok = usageElem.TryGetProperty("total_tokens", out var tt) ? tt.GetInt32() : 0;
+						int promptTok = usageElem.TryGetProperty("prompt_tokens", out var pt) ? pt.GetInt32() : 0;
+						int compTok = usageElem.TryGetProperty("completion_tokens", out var ct) ? ct.GetInt32() : 0;
+						string modelUsed = usageElem.TryGetProperty("last_model_used", out var lmu) ? (lmu.GetString() ?? "gemini-2.5-flash") : "gemini-2.5-flash";
+						int activeKeys = usageElem.TryGetProperty("active_keys", out var ak) ? ak.GetInt32() : keys.Count;
+						if (totalTok > 0)
+						{
+							_ = Task.Run(() => PostTokenTelemetryAsync(totalTok, promptTok, compTok, modelUsed, activeKeys));
+						}
+					}
+					catch (Exception exTel)
+					{
+						Log("Usage telemetry extraction error: " + exTel.Message);
+					}
+				}
+
 				return true;
 			}
 		}

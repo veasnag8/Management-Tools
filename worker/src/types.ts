@@ -21,8 +21,19 @@ export type ApiErrorCode =
   | 'NOT_STARTED'
   | 'RATE_LIMITED'
   | 'SERVER_ERROR'
+  | 'INTERNAL_ERROR'
   | 'OFFLINE_NOT_ALLOWED'
   | 'UNAUTHORIZED';
+
+export interface ServiceResult<T = any> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: ApiErrorCode;
+    message: string;
+  };
+  statusCode?: number;
+}
 
 export interface ApiResponse<T = any> {
   success: boolean;

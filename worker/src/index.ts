@@ -7,6 +7,7 @@ import { handleHeartbeat } from './routes/heartbeat';
 import { handleDeactivate } from './routes/deactivate';
 import { handleResetDevice } from './routes/reset-device';
 import { handleVersion } from './routes/version';
+import { handleTelemetry } from './routes/telemetry';
 
 const router = AutoRouter();
 
@@ -43,6 +44,7 @@ router.post('/v1/validate', (request: Request, env: Env) => handleValidate(reque
 router.post('/v1/heartbeat', (request: Request, env: Env) => handleHeartbeat(request, env));
 router.post('/v1/deactivate', (request: Request, env: Env) => handleDeactivate(request, env));
 router.post('/v1/reset-device', (request: Request, env: Env) => handleResetDevice(request, env));
+router.post('/v1/telemetry', (request: Request, env: Env) => handleTelemetry(request, env));
 router.get('/v1/version', (request: Request, env: Env) => handleVersion(request, env));
 
 // 404 handler
