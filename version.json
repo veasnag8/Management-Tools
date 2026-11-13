@@ -4,10 +4,10 @@
   "latest_version": "2.1.1",
   "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.1/ToolDubber-Setup-v2.1.1.exe",
   "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.1/ToolDubber-Patch-v2.1.1.zip",
-  "patch_sha256": "85c4986ffed6ca6c3a608ba1a06af59a55b52df16d725705a0e2c58ae088d44e",
-  "patch_size_bytes": 175324,
+  "patch_sha256": "29f3dc2fa1faef88d80734bd0ceab142b565ac3475ce229de841ade0a61916f7",
+  "patch_size_bytes": 178578,
   "min_patch_version": "2.0.0",
-  "release_notes": "កំណែថ្មី Version 2.1.1 រួមមាន:\n1. Auto Video Aspect Ratio Detection៖ កម្មវិធីពិនិត្យទំហំវីដេអូដោយស្វ័យប្រវត្តិពេល Upload ឬ Drag & Drop ដោយជ្រើសយក 16:9 (Landscape) ឬ 9:16 (Portrait) ភ្លាមៗ\n2. 🔑 Gemini Multi-Key Pool Manager៖ អាចបន្ថែម API Key បានច្រើន ដើម្បីទទួលបាន Token ច្រើន បង្វិល Key ឆ្លាស់គ្នា (Round-Robin) និង Auto-Failover បើអស់ Quota\n3. ⚡ Live AI Energy Conduit Telemetry៖ ភ្ជាប់ Real Token Telemetry ទៅកាន់ SNA GOD Console ធ្វើឱ្យខ្សែចរន្តភ្លើងរត់បញ្ចេញពន្លឺភ្លាមៗពេលកំពុង Translate",
-  "sha256": "4fb9b66679cfe49ff9a3f6712cfc3904f38feb8522f297e1fb231362f3b18aaa",
+  "release_notes": "កំណែថ្មី Version 2.1.1 រួមមាន:\n1. 📂 Episodes List Import from Folder៖ អាចនាំចូលវីដេអូច្រើនភាគពី Folder តែមួយ (Import from Folder) ឬជ្រើសរើសឯកសារ Files ជាច្រើន រួចចុច Translate Selected តែម្តងយ៉ាងងាយស្រួលបំផុត\n2. 🎬 Auto Video Aspect Ratio Detection៖ កម្មវិធីពិនិត្យទំហំវីដេអូដោយស្វ័យប្រវត្តិពេល Upload ឬ Drag & Drop ដោយជ្រើសយក 16:9 (Landscape) ឬ 9:16 (Portrait) ភ្លាមៗ\n3. 🔑 Gemini Multi-Key Pool Manager៖ អាចបន្ថែម API Key បានច្រើន ដើម្បីទទួលបាន Token ច្រើន បង្វិល Key ឆ្លាស់គ្នា (Round-Robin) និង Auto-Failover បើអស់ Quota\n4. ⚡ Live AI Energy Conduit Telemetry៖ ភ្ជាប់ Real Token Telemetry ទៅកាន់ SNA GOD Console ធ្វើឱ្យខ្សែចរន្តភ្លើងរត់បញ្ចេញពន្លឺភ្លាមៗពេលកំពុង Translate",
+  "sha256": "0a1ae2f06507cbc2ae3b986ba2fd746ebc9d382e9bdd518ee80291e8f86286de",
   "mandatory": false
 }

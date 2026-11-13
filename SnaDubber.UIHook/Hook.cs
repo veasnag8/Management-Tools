@@ -4069,6 +4069,45 @@ del ""%~f0""
 		}
 	}
 
+	private static int NaturalCompare(string a, string b)
+	{
+		if (a == b) return 0;
+		if (a == null) return -1;
+		if (b == null) return 1;
+		return System.Text.RegularExpressions.Regex.Replace(a, @"\d+", m => m.Value.PadLeft(10, '0'))
+			.CompareTo(System.Text.RegularExpressions.Regex.Replace(b, @"\d+", m => m.Value.PadLeft(10, '0')));
+	}
+
+	private static double ProbeVideoDurationSec(string videoPath)
+	{
+		try
+		{
+			if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath)) return 0.0;
+			string ffprobe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", "ffprobe.exe");
+			if (!File.Exists(ffprobe)) ffprobe = "ffprobe";
+			var psi = new ProcessStartInfo
+			{
+				FileName = ffprobe,
+				Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{videoPath}\"",
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true
+			};
+			using var proc = Process.Start(psi);
+			if (proc != null)
+			{
+				string output = proc.StandardOutput.ReadToEnd()?.Trim();
+				proc.WaitForExit();
+				if (!string.IsNullOrEmpty(output) && double.TryParse(output, NumberStyles.Float, CultureInfo.InvariantCulture, out double sec))
+				{
+					return Math.Max(0.0, sec);
+				}
+			}
+		}
+		catch { }
+		return 0.0;
+	}
+
 	private static void ShowSplitEpisodesListDialog(Window owner, MainViewModel vm, string folderOverride = null)
 	{
 		try
@@ -4081,22 +4120,18 @@ del ""%~f0""
 
 			Window dialog = new Window
 			{
-				Title = "Split Episodes List",
+				Title = "Episodes Batch Manager — Import & Translate",
 				Owner = owner,
 				WindowStartupLocation = WindowStartupLocation.CenterOwner,
-				Width = 680,
-				Height = 520,
-				MinWidth = 620,
-				MinHeight = 460,
+				Width = 740,
+				Height = 560,
+				MinWidth = 660,
+				MinHeight = 480,
 				ResizeMode = ResizeMode.CanResize,
 				ShowInTaskbar = false,
 				Background = new SolidColorBrush(Color.FromRgb(4, 10, 20)),
 				FontFamily = new FontFamily("Segoe UI, Khmer OS Battambang")
 			};
-
-			var realEpisodes = vm.Episodes?
-				.Where(ep => !string.IsNullOrEmpty(ep.VideoPath) || ep.TranscriptionStatus == "Splitting" || ep.TranscriptionStatus == "Ready" || ep.TranscriptionStatus == "Error")
-				.ToList() ?? new List<EpisodeItem>();
 
 			Action<Button, double> applyDarkBtn = (btn, radius) =>
 			{
@@ -4120,16 +4155,17 @@ del ""%~f0""
 			};
 
 			StackPanel header = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-			header.Children.Add(new TextBlock
+			TextBlock txtHeaderTitle = new TextBlock
 			{
-				Text = $"📋 Split Episodes List ({realEpisodes.Count})",
+				Text = "📋 Episodes Batch List",
 				Foreground = accentBrush,
 				FontSize = 19,
 				FontWeight = FontWeights.Bold
-			});
+			};
+			header.Children.Add(txtHeaderTitle);
 			header.Children.Add(new TextBlock
 			{
-				Text = "ធីក (Checkbox) លើភាគដែលអ្នកចង់ Translate ច្រើនក្នុងពេលតែមួយ ឬចុច Load & Preview លើភាគណាមួយ។",
+				Text = "នាំចូលវីដេអូច្រើនភាគពី Folder ឬបំបែកភាគ រួចធីកជ្រើសរើស (Checkbox) ដើម្បី Translate ម្ដងច្រើន Episodes ដោយស្វ័យប្រវត្តិ។",
 				Foreground = mutedBrush,
 				FontSize = 11.5,
 				Margin = new Thickness(0, 4, 0, 0)
@@ -4158,159 +4194,430 @@ del ""%~f0""
 				translateSelectedBtn.IsEnabled = count > 0;
 			};
 
-			StackPanel selectBar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+			string firstFolder = folderOverride;
+			StackPanel listPanel = new StackPanel();
+
+			Button btnImportFolder = new Button
+			{
+				Content = "📂 Import Folder",
+				ToolTip = "ជ្រើសរើស Folder ដែលមានវីដេអូច្រើនភាគ (.mp4, .mkv, .mov, etc.) ដើម្បីនាំចូលបញ្ជី",
+				Padding = new Thickness(14, 6, 14, 6),
+				Background = new LinearGradientBrush(Color.FromRgb(30, 58, 138), Color.FromRgb(29, 78, 216), 45),
+				Foreground = Brushes.White,
+				BorderBrush = new SolidColorBrush(Color.FromRgb(96, 165, 250)),
+				BorderThickness = new Thickness(1),
+				FontWeight = FontWeights.Bold,
+				Margin = new Thickness(0, 0, 8, 0),
+				Cursor = Cursors.Hand
+			};
+			applyDarkBtn(btnImportFolder, 6);
+
+			Button btnAddFiles = new Button
+			{
+				Content = "➕ Add Files...",
+				ToolTip = "ជ្រើសរើសឯកសារវីដេអូជាច្រើនក្នុងពេលតែមួយ",
+				Padding = new Thickness(12, 6, 12, 6),
+				Background = cardBrush,
+				Foreground = accentBrush,
+				BorderBrush = borderBrush,
+				BorderThickness = new Thickness(1),
+				FontWeight = FontWeights.SemiBold,
+				Margin = new Thickness(0, 0, 8, 0),
+				Cursor = Cursors.Hand
+			};
+			applyDarkBtn(btnAddFiles, 6);
+
 			Button btnSelAll = new Button
 			{
 				Content = "✓ Select All",
-				Padding = new Thickness(12, 5, 12, 5),
+				Padding = new Thickness(12, 6, 12, 6),
 				Background = cardBrush,
 				Foreground = accentBrush,
 				BorderBrush = borderBrush,
 				BorderThickness = new Thickness(1),
 				Margin = new Thickness(0, 0, 8, 0),
-				Cursor = Cursors.Hand,
-				IsEnabled = realEpisodes.Count > 0
+				Cursor = Cursors.Hand
 			};
 			applyDarkBtn(btnSelAll, 6);
+
 			Button btnSelNone = new Button
 			{
 				Content = "Clear",
-				Padding = new Thickness(12, 5, 12, 5),
+				Padding = new Thickness(12, 6, 12, 6),
 				Background = cardBrush,
 				Foreground = mutedBrush,
 				BorderBrush = borderBrush,
 				BorderThickness = new Thickness(1),
-				Cursor = Cursors.Hand,
-				IsEnabled = realEpisodes.Count > 0
+				Margin = new Thickness(0, 0, 8, 0),
+				Cursor = Cursors.Hand
 			};
 			applyDarkBtn(btnSelNone, 6);
+
+			Button btnClearAll = new Button
+			{
+				Content = "🗑 Clear All",
+				ToolTip = "លុបភាគទាំងអស់ចេញពីបញ្ជី",
+				Padding = new Thickness(12, 6, 12, 6),
+				Background = new SolidColorBrush(Color.FromRgb(40, 20, 25)),
+				Foreground = new SolidColorBrush(Color.FromRgb(248, 113, 113)),
+				BorderBrush = new SolidColorBrush(Color.FromRgb(153, 27, 27)),
+				BorderThickness = new Thickness(1),
+				Cursor = Cursors.Hand
+			};
+			applyDarkBtn(btnClearAll, 6);
+
 			btnSelAll.Click += (s, e) => { foreach (var x in selectedChecks) if (x.Box.IsEnabled) x.Box.IsChecked = true; refreshSelectedCount(); };
 			btnSelNone.Click += (s, e) => { foreach (var x in selectedChecks) x.Box.IsChecked = false; refreshSelectedCount(); };
+
+			StackPanel selectBar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 8) };
+			selectBar.Children.Add(btnImportFolder);
+			selectBar.Children.Add(btnAddFiles);
 			selectBar.Children.Add(btnSelAll);
 			selectBar.Children.Add(btnSelNone);
+			selectBar.Children.Add(btnClearAll);
 			header.Children.Add(selectBar);
 
-			StackPanel listPanel = new StackPanel();
-			string firstFolder = folderOverride;
-
-			if (realEpisodes.Count == 0)
+			Action rebuildList = null;
+			rebuildList = () =>
 			{
-				listPanel.Children.Add(new TextBlock
+				listPanel.Children.Clear();
+				selectedChecks.Clear();
+
+				var realEpisodes = vm.Episodes?
+					.Where(ep => !string.IsNullOrEmpty(ep.VideoPath) || ep.TranscriptionStatus == "Splitting" || ep.TranscriptionStatus == "Ready" || ep.TranscriptionStatus == "Error" || ep.TranscriptionStatus == "Translating" || ep.TranscriptionStatus == "Exported")
+					.ToList() ?? new List<EpisodeItem>();
+
+				txtHeaderTitle.Text = $"📋 Episodes Batch List ({realEpisodes.Count})";
+				btnSelAll.IsEnabled = realEpisodes.Count > 0;
+				btnSelNone.IsEnabled = realEpisodes.Count > 0;
+				btnClearAll.IsEnabled = realEpisodes.Count > 0;
+
+				if (realEpisodes.Count == 0)
 				{
-					Text = "មិនទាន់មានភាគវីដេអូដែលបានបំបែកនៅឡើយទេ។ សូមចុច '✂ Split Videos' ជាមុនសិន។",
-					Foreground = mutedBrush,
-					FontSize = 13,
-					Margin = new Thickness(16, 40, 16, 16),
-					HorizontalAlignment = HorizontalAlignment.Center
-				});
-			}
-			else
-			{
-				int idx = 0;
-				foreach (EpisodeItem ep in realEpisodes)
-				{
-					if (string.IsNullOrEmpty(firstFolder) && !string.IsNullOrEmpty(ep.VideoPath))
+					Border emptyCard = new Border
 					{
-						firstFolder = Path.GetDirectoryName(ep.VideoPath);
-					}
-
-					bool fileExists = !string.IsNullOrEmpty(ep.VideoPath) && File.Exists(ep.VideoPath);
-
-					Grid row = new Grid();
-					row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-					row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-					row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-					row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-					CheckBox epCheck = new CheckBox
+						Background = cardBrush,
+						BorderBrush = borderBrush,
+						BorderThickness = new Thickness(1),
+						CornerRadius = new CornerRadius(8),
+						Padding = new Thickness(24, 36, 24, 36),
+						Margin = new Thickness(8, 20, 8, 8)
+					};
+					StackPanel emptyBody = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+					emptyBody.Children.Add(new TextBlock
 					{
-						IsChecked = false,
-						IsEnabled = fileExists,
-						VerticalAlignment = VerticalAlignment.Center,
+						Text = "📂 មិនទាន់មានវីដេអូក្នុងបញ្ជីនៅឡើយទេ",
+						Foreground = Brushes.White,
+						FontSize = 16,
+						FontWeight = FontWeights.Bold,
+						HorizontalAlignment = HorizontalAlignment.Center,
+						Margin = new Thickness(0, 0, 0, 8)
+					});
+					emptyBody.Children.Add(new TextBlock
+					{
+						Text = "លោកអ្នកអាចនាំចូលវីដេអូច្រើនភាគពី Folder តែមួយ ឬជ្រើសរើសឯកសារវីដេអូជាច្រើន ឬបំបែកភាគពីវីដេអូធំ (Split Videos)។",
+						Foreground = mutedBrush,
+						FontSize = 12,
+						HorizontalAlignment = HorizontalAlignment.Center,
+						Margin = new Thickness(0, 0, 0, 20),
+						TextWrapping = TextWrapping.Wrap,
+						TextAlignment = TextAlignment.Center
+					});
+
+					StackPanel emptyActions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+					Button emptyImportFolder = new Button
+					{
+						Content = "📂 នាំចូលវីដេអូពី Folder (Import from Folder)",
+						Padding = new Thickness(18, 10, 18, 10),
+						Background = new LinearGradientBrush(Color.FromRgb(30, 58, 138), Color.FromRgb(29, 78, 216), 45),
+						Foreground = Brushes.White,
+						BorderBrush = new SolidColorBrush(Color.FromRgb(96, 165, 250)),
+						BorderThickness = new Thickness(1),
+						FontWeight = FontWeights.Bold,
 						Margin = new Thickness(0, 0, 12, 0),
 						Cursor = Cursors.Hand
 					};
-					epCheck.Checked += (s, e) => refreshSelectedCount();
-					epCheck.Unchecked += (s, e) => refreshSelectedCount();
-					selectedChecks.Add((ep, epCheck));
-					Grid.SetColumn(epCheck, 0);
-					row.Children.Add(epCheck);
+					applyDarkBtn(emptyImportFolder, 8);
+					emptyImportFolder.Click += (s, e) => btnImportFolder.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-					StackPanel info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-					info.Children.Add(new TextBlock
+					Button emptyAddFiles = new Button
 					{
-						Text = $"{ep.Title}   •   {ep.DurationText}",
-						Foreground = Brushes.White,
-						FontSize = 13,
-						FontWeight = FontWeights.SemiBold
-					});
-					info.Children.Add(new TextBlock
-					{
-						Text = string.IsNullOrEmpty(ep.VideoPath) ? "Pending..." : Path.GetFileName(ep.VideoPath),
-						Foreground = mutedBrush,
-						FontSize = 11,
-						Margin = new Thickness(0, 2, 0, 0)
-					});
-					Grid.SetColumn(info, 1);
-					row.Children.Add(info);
-
-					Border statusPill = new Border
-					{
-						Background = new SolidColorBrush(ep.TranscriptionStatus == "Error" ? Color.FromRgb(127, 29, 29) : Color.FromRgb(6, 78, 59)),
-						CornerRadius = new CornerRadius(10),
-						Padding = new Thickness(10, 3, 10, 3),
-						Margin = new Thickness(10, 0, 10, 0),
-						VerticalAlignment = VerticalAlignment.Center,
-						Child = new TextBlock
-						{
-							Text = string.IsNullOrEmpty(ep.TranscriptionStatus) ? "Ready" : ep.TranscriptionStatus,
-							Foreground = Brushes.White,
-							FontSize = 11,
-							FontWeight = FontWeights.SemiBold
-						}
-					};
-					Grid.SetColumn(statusPill, 2);
-					row.Children.Add(statusPill);
-
-					Button loadBtn = new Button
-					{
-						Content = "▶ Load & Preview",
-						Padding = new Thickness(12, 6, 12, 6),
-						Background = new SolidColorBrush(Color.FromRgb(2, 132, 199)),
-						Foreground = Brushes.White,
-						BorderThickness = new Thickness(0),
-						FontWeight = FontWeights.SemiBold,
-						Cursor = Cursors.Hand,
-						IsEnabled = fileExists
-					};
-					applyDarkBtn(loadBtn, 6);
-					EpisodeItem captured = ep;
-					loadBtn.Click += async (s, e) =>
-					{
-						try
-						{
-							dialog.Close();
-							await vm.LoadVideoFileAsync(captured.VideoPath);
-						}
-						catch (Exception ex)
-						{
-							MessageBox.Show($"Could not load episode: {ex.Message}", "Load Episode", MessageBoxButton.OK, MessageBoxImage.Error);
-						}
-					};
-					Grid.SetColumn(loadBtn, 3);
-					row.Children.Add(loadBtn);
-
-					listPanel.Children.Add(new Border
-					{
-						Child = row,
-						Background = idx % 2 == 0 ? cardBrush : bgBrush,
+						Content = "➕ ជ្រើសរើសឯកសារវីដេអូ (Add Files...)",
+						Padding = new Thickness(16, 10, 16, 10),
+						Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+						Foreground = accentBrush,
 						BorderBrush = borderBrush,
-						BorderThickness = new Thickness(0, 0, 0, 1),
-						Padding = new Thickness(14, 10, 14, 10)
-					});
-					idx++;
+						BorderThickness = new Thickness(1),
+						FontWeight = FontWeights.SemiBold,
+						Cursor = Cursors.Hand
+					};
+					applyDarkBtn(emptyAddFiles, 8);
+					emptyAddFiles.Click += (s, e) => btnAddFiles.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+					emptyActions.Children.Add(emptyImportFolder);
+					emptyActions.Children.Add(emptyAddFiles);
+					emptyBody.Children.Add(emptyActions);
+					emptyCard.Child = emptyBody;
+					listPanel.Children.Add(emptyCard);
 				}
-			}
+				else
+				{
+					int idx = 0;
+					foreach (EpisodeItem ep in realEpisodes)
+					{
+						if (string.IsNullOrEmpty(firstFolder) && !string.IsNullOrEmpty(ep.VideoPath))
+						{
+							firstFolder = Path.GetDirectoryName(ep.VideoPath);
+						}
+
+						bool fileExists = !string.IsNullOrEmpty(ep.VideoPath) && File.Exists(ep.VideoPath);
+
+						Grid row = new Grid();
+						row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+						row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+						row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+						row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+						row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+						CheckBox epCheck = new CheckBox
+						{
+							IsChecked = true,
+							IsEnabled = fileExists,
+							VerticalAlignment = VerticalAlignment.Center,
+							Margin = new Thickness(0, 0, 12, 0),
+							Cursor = Cursors.Hand
+						};
+						epCheck.Checked += (s, e) => refreshSelectedCount();
+						epCheck.Unchecked += (s, e) => refreshSelectedCount();
+						selectedChecks.Add((ep, epCheck));
+						Grid.SetColumn(epCheck, 0);
+						row.Children.Add(epCheck);
+
+						StackPanel info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+						info.Children.Add(new TextBlock
+						{
+							Text = $"{ep.Title}   •   {ep.DurationText}",
+							Foreground = Brushes.White,
+							FontSize = 13,
+							FontWeight = FontWeights.SemiBold
+						});
+						info.Children.Add(new TextBlock
+						{
+							Text = string.IsNullOrEmpty(ep.VideoPath) ? "Pending..." : Path.GetFileName(ep.VideoPath),
+							Foreground = mutedBrush,
+							FontSize = 11,
+							Margin = new Thickness(0, 2, 0, 0)
+						});
+						Grid.SetColumn(info, 1);
+						row.Children.Add(info);
+
+						Color pillColor = ep.TranscriptionStatus switch
+						{
+							"Error" => Color.FromRgb(127, 29, 29),
+							"Translating" => Color.FromRgb(124, 58, 237),
+							"Exported" => Color.FromRgb(16, 185, 129),
+							_ => Color.FromRgb(6, 78, 59)
+						};
+
+						Border statusPill = new Border
+						{
+							Background = new SolidColorBrush(pillColor),
+							CornerRadius = new CornerRadius(10),
+							Padding = new Thickness(10, 3, 10, 3),
+							Margin = new Thickness(10, 0, 10, 0),
+							VerticalAlignment = VerticalAlignment.Center,
+							Child = new TextBlock
+							{
+								Text = string.IsNullOrEmpty(ep.TranscriptionStatus) ? "Ready" : ep.TranscriptionStatus,
+								Foreground = Brushes.White,
+								FontSize = 11,
+								FontWeight = FontWeights.SemiBold
+							}
+						};
+						Grid.SetColumn(statusPill, 2);
+						row.Children.Add(statusPill);
+
+						Button loadBtn = new Button
+						{
+							Content = "▶ Load & Preview",
+							Padding = new Thickness(12, 6, 12, 6),
+							Background = new SolidColorBrush(Color.FromRgb(2, 132, 199)),
+							Foreground = Brushes.White,
+							BorderThickness = new Thickness(0),
+							FontWeight = FontWeights.SemiBold,
+							Cursor = Cursors.Hand,
+							IsEnabled = fileExists
+						};
+						applyDarkBtn(loadBtn, 6);
+						EpisodeItem captured = ep;
+						loadBtn.Click += async (s, e) =>
+						{
+							try
+							{
+								dialog.Close();
+								await vm.LoadVideoFileAsync(captured.VideoPath);
+							}
+							catch (Exception ex)
+							{
+								MessageBox.Show($"Could not load episode: {ex.Message}", "Load Episode", MessageBoxButton.OK, MessageBoxImage.Error);
+							}
+						};
+						Grid.SetColumn(loadBtn, 3);
+						row.Children.Add(loadBtn);
+
+						Button delBtn = new Button
+						{
+							Content = "✕",
+							ToolTip = "Remove from list",
+							Width = 26,
+							Height = 26,
+							Padding = new Thickness(0),
+							Background = Brushes.Transparent,
+							Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+							BorderThickness = new Thickness(0),
+							FontSize = 12,
+							Cursor = Cursors.Hand,
+							Margin = new Thickness(6, 0, 0, 0)
+						};
+						applyDarkBtn(delBtn, 4);
+						EpisodeItem toDel = ep;
+						delBtn.Click += (s, e) =>
+						{
+							vm.Episodes?.Remove(toDel);
+							rebuildList();
+						};
+						Grid.SetColumn(delBtn, 4);
+						row.Children.Add(delBtn);
+
+						listPanel.Children.Add(new Border
+						{
+							Child = row,
+							Background = idx % 2 == 0 ? cardBrush : bgBrush,
+							BorderBrush = borderBrush,
+							BorderThickness = new Thickness(0, 0, 0, 1),
+							Padding = new Thickness(14, 10, 14, 10)
+						});
+						idx++;
+					}
+				}
+
+				refreshSelectedCount();
+			};
+
+			Action<IEnumerable<string>> addVideoFilesToList = files =>
+			{
+				if (files == null) return;
+				var sorted = files
+					.Where(f => !string.IsNullOrEmpty(f) && File.Exists(f))
+					.OrderBy(f => Path.GetFileName(f), Comparer<string>.Create(NaturalCompare))
+					.ToList();
+
+				if (sorted.Count == 0) return;
+
+				if (vm.Episodes == null) return;
+
+				int startNum = vm.Episodes.Count > 0 ? vm.Episodes.Max(e => e.Number) + 1 : 1;
+				int addedCount = 0;
+				foreach (string file in sorted)
+				{
+					if (vm.Episodes.Any(e => string.Equals(e.VideoPath, file, StringComparison.OrdinalIgnoreCase)))
+						continue;
+
+					double durationSec = ProbeVideoDurationSec(file);
+					string durText = durationSec > 0 
+						? TimeSpan.FromSeconds(durationSec).ToString(durationSec >= 3600 ? @"hh\:mm\:ss" : @"mm\:ss")
+						: "--:--";
+
+					string nameNoExt = Path.GetFileNameWithoutExtension(file);
+					string epTitle = nameNoExt.Length > 32 ? nameNoExt.Substring(0, 29) + "..." : nameNoExt;
+
+					vm.Episodes.Add(new EpisodeItem
+					{
+						Number = startNum++,
+						Title = epTitle,
+						DurationText = durText,
+						VideoPath = file,
+						TranscriptionStatus = "Ready"
+					});
+					addedCount++;
+				}
+
+				if (sorted.Count > 0 && vm.CurrentProject != null && (string.IsNullOrEmpty(vm.CurrentProject.VideoPath) || !File.Exists(vm.CurrentProject.VideoPath)))
+				{
+					try { _ = vm.LoadVideoFileAsync(sorted[0]); } catch { }
+				}
+
+				if (sorted.Count > 0) firstFolder = Path.GetDirectoryName(sorted[0]);
+				rebuildList();
+				MessageBox.Show($"បាននាំចូលចំនួន {addedCount} ភាគ ដោយជោគជ័យ!", "Episodes Imported", MessageBoxButton.OK, MessageBoxImage.Information);
+			};
+
+			btnImportFolder.Click += (s, e) =>
+			{
+				try
+				{
+					var folderDlg = new Microsoft.Win32.OpenFolderDialog
+					{
+						Title = "ជ្រើសរើស Folder ដែលមានវីដេអូច្រើនភាគ (Select Folder)",
+						Multiselect = false
+					};
+					if (folderDlg.ShowDialog(dialog) == true && !string.IsNullOrWhiteSpace(folderDlg.FolderName))
+					{
+						string folder = folderDlg.FolderName;
+						string[] videoExtensions = new[] { ".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".ts", ".wmv", ".m4v" };
+						var files = Directory.GetFiles(folder)
+							.Where(f => videoExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+							.ToList();
+
+						if (files.Count == 0)
+						{
+							MessageBox.Show("រកមិនឃើញឯកសារវីដេអូ (.mp4, .mkv, .mov, etc.) ក្នុង Folder នេះទេ។", "Import Episodes", MessageBoxButton.OK, MessageBoxImage.Information);
+							return;
+						}
+
+						firstFolder = folder;
+						addVideoFilesToList(files);
+					}
+				}
+				catch (Exception ex)
+				{
+					MessageBox.Show($"Could not import folder: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+				}
+			};
+
+			btnAddFiles.Click += (s, e) =>
+			{
+				try
+				{
+					var fileDlg = new Microsoft.Win32.OpenFileDialog
+					{
+						Title = "ជ្រើសរើសឯកសារវីដេអូ (Select Video Files)",
+						Multiselect = true,
+						Filter = "Video Files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.flv;*.ts;*.wmv;*.m4v|All Files|*.*"
+					};
+					if (fileDlg.ShowDialog(dialog) == true && fileDlg.FileNames != null && fileDlg.FileNames.Length > 0)
+					{
+						addVideoFilesToList(fileDlg.FileNames);
+					}
+				}
+				catch (Exception ex)
+				{
+					MessageBox.Show($"Could not add files: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+				}
+			};
+
+			btnClearAll.Click += (s, e) =>
+			{
+				if (vm.Episodes != null && vm.Episodes.Count > 0)
+				{
+					var res = MessageBox.Show("តើអ្នកពិតជាចង់សម្អាតបញ្ជីភាគទាំងអស់មែនទេ? (Clear all episodes?)", "Clear Episodes", MessageBoxButton.YesNo, MessageBoxImage.Question);
+					if (res == MessageBoxResult.Yes)
+					{
+						vm.Episodes.Clear();
+						rebuildList();
+					}
+				}
+			};
 
 			ScrollViewer scroll = new ScrollViewer
 			{
@@ -4329,19 +4636,35 @@ del ""%~f0""
 
 			Button openFolderBtn = new Button
 			{
-				Content = "📁 Open Episodes Folder",
+				Content = "📁 Open Folder",
 				Padding = new Thickness(14, 8, 14, 8),
 				Background = cardBrush,
 				Foreground = accentBrush,
 				BorderBrush = borderBrush,
 				BorderThickness = new Thickness(1),
-				Cursor = Cursors.Hand,
-				IsEnabled = !string.IsNullOrEmpty(firstFolder) && Directory.Exists(firstFolder)
+				Cursor = Cursors.Hand
 			};
 			applyDarkBtn(openFolderBtn, 8);
 			openFolderBtn.Click += (s, e) =>
 			{
-				try { Process.Start(new ProcessStartInfo { FileName = firstFolder, UseShellExecute = true }); } catch { }
+				try
+				{
+					string f = firstFolder;
+					if (string.IsNullOrEmpty(f) || !Directory.Exists(f))
+					{
+						var firstEp = vm.Episodes?.FirstOrDefault(ep => !string.IsNullOrEmpty(ep.VideoPath) && File.Exists(ep.VideoPath));
+						if (firstEp != null) f = Path.GetDirectoryName(firstEp.VideoPath);
+					}
+					if (!string.IsNullOrEmpty(f) && Directory.Exists(f))
+					{
+						Process.Start(new ProcessStartInfo { FileName = f, UseShellExecute = true });
+					}
+					else
+					{
+						MessageBox.Show("Folder is not available yet.", "Open Folder", MessageBoxButton.OK, MessageBoxImage.Information);
+					}
+				}
+				catch { }
 			};
 			footer.Children.Add(openFolderBtn);
 
@@ -4389,6 +4712,8 @@ del ""%~f0""
 				BorderThickness = new Thickness(1),
 				CornerRadius = new CornerRadius(10)
 			};
+
+			rebuildList();
 			dialog.ShowDialog();
 		}
 		catch (Exception ex)
@@ -4400,7 +4725,9 @@ del ""%~f0""
 	private static async Task TranslateSelectedEpisodesAsync(Window owner, MainViewModel vm, List<EpisodeItem> selected)
 	{
 		if (selected == null || selected.Count == 0) return;
-		string baseFolder = Path.GetDirectoryName(selected[0].VideoPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+		string baseFolder = !string.IsNullOrEmpty(selected[0].VideoPath) && File.Exists(selected[0].VideoPath)
+			? Path.GetDirectoryName(selected[0].VideoPath)
+			: Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
 		string khmerOutDir = Path.Combine(baseFolder, "Khmer_Exported");
 		Directory.CreateDirectory(khmerOutDir);
 
@@ -4421,7 +4748,8 @@ del ""%~f0""
 					await RunFullPipelineAsync(vm, owner);
 
 					vm.BusyStatusText = $"Episode {ep.Number}: exporting Khmer video...";
-					string finalPath = Path.Combine(khmerOutDir, $"Episode_{ep.Number:00}_Khmer.mp4");
+					string originalName = Path.GetFileNameWithoutExtension(ep.VideoPath);
+					string finalPath = Path.Combine(khmerOutDir, $"{originalName}_Khmer.mp4");
 					IEnumerable<OverlayItem> exportOverlays = AddTextLayersToExportOverlays(vm.Overlays, vm.TextLayers);
 					FieldInfo ffmpegField = typeof(MainViewModel).GetField("_ffmpegService", BindingFlags.Instance | BindingFlags.NonPublic);
 					if (ffmpegField?.GetValue(vm) is not IFFmpegService ffmpeg) throw new InvalidOperationException("FFmpeg export service is unavailable.");
@@ -4446,11 +4774,15 @@ del ""%~f0""
 			}
 
 			vm.ProjectStatusMessage = $"Translated & exported {done}/{selected.Count} episode(s) to {khmerOutDir}";
-			MessageBox.Show(
-				$"Translated & exported {done}/{selected.Count} episode(s)!\n\nOutput folder:\n{khmerOutDir}",
+			var openRes = MessageBox.Show(
+				$"បានបកប្រែ និង Export ដោយជោគជ័យចំនួន {done}/{selected.Count} ភាគ!\n\nFolder ផ្ទុកវីដេអូចប់:\n{khmerOutDir}\n\nតើអ្នកចង់បើកមើល Folder ឥឡូវនេះទេ?",
 				"Translate Selected Complete",
-				MessageBoxButton.OK,
+				MessageBoxButton.YesNo,
 				MessageBoxImage.Information);
+			if (openRes == MessageBoxResult.Yes)
+			{
+				try { Process.Start(new ProcessStartInfo { FileName = khmerOutDir, UseShellExecute = true }); } catch { }
+			}
 		}
 		finally
 		{
