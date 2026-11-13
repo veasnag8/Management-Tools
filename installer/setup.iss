@@ -2,7 +2,7 @@
 ; Tool Dubber Windows Installer v2.1.0
 
 #define MyAppName "Tool Dubber"
-#define MyAppVersion "2.1.0"
+#define MyAppVersion "2.1.1"
 #define MyAppPublisher "SNA Studio"
 #define MyAppExeName "SnaDubber.exe"
 #define MyAppSourceDir "D:\Project\Release_v1.2.0\SNA-Dubber"

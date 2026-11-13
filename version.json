@@ -1,13 +1,13 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.1.0",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.0/ToolDubber-Setup-v2.1.0.exe",
-  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.0/ToolDubber-Patch-v2.1.0.zip",
-  "patch_sha256": "39c70e327b8716782f8a0c6edbbc25ad29ba10cc12bcdd14327bb2ce91bbe45f",
-  "patch_size_bytes": 153893,
-  "min_patch_version": "2.0.9",
-  "release_notes": "កំណែថ្មី Version 2.1.0 រួមមាន:\n1. Smart Auto-Analysis Updater៖ កម្មវិធីវិភាគដោយស្វ័យប្រវត្តិថាតើគួរទាញយក Fast Patch (< 1 MB) ឬ Full Installer (~140 MB) ព្រមទាំង Fallback ស្វ័យប្រវត្តិពេលចាំបាច់\n2. បន្ថែម CheckBox ក្នុងបញ្ជី 📋 Episodes ដើម្បី Tick ជ្រើសរើសភាគច្រើន ឬតិច រួចចុច Translate Selected តែម្តង\n3. ដាក់ប៊ូតុង 📋 Episodes នៅជាប់ ✂ Split Videos និងកែ Auto-Update Center ឱ្យបង្ហាញ Up to Date ✓ ត្រឹមត្រូវ",
-  "sha256": "2d743e3ecb160778df919ff1079ea19bdd68b822d8b5414cfc9dd5352a767d6c",
+  "latest_version": "2.1.1",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.1/ToolDubber-Setup-v2.1.1.exe",
+  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.1/ToolDubber-Patch-v2.1.1.zip",
+  "patch_sha256": "85c4986ffed6ca6c3a608ba1a06af59a55b52df16d725705a0e2c58ae088d44e",
+  "patch_size_bytes": 175324,
+  "min_patch_version": "2.0.0",
+  "release_notes": "កំណែថ្មី Version 2.1.1 រួមមាន:\n1. Auto Video Aspect Ratio Detection៖ កម្មវិធីពិនិត្យទំហំវីដេអូដោយស្វ័យប្រវត្តិពេល Upload ឬ Drag & Drop ដោយជ្រើសយក 16:9 (Landscape) ឬ 9:16 (Portrait) ភ្លាមៗ\n2. 🔑 Gemini Multi-Key Pool Manager៖ អាចបន្ថែម API Key បានច្រើន ដើម្បីទទួលបាន Token ច្រើន បង្វិល Key ឆ្លាស់គ្នា (Round-Robin) និង Auto-Failover បើអស់ Quota\n3. ⚡ Live AI Energy Conduit Telemetry៖ ភ្ជាប់ Real Token Telemetry ទៅកាន់ SNA GOD Console ធ្វើឱ្យខ្សែចរន្តភ្លើងរត់បញ្ចេញពន្លឺភ្លាមៗពេលកំពុង Translate",
+  "sha256": "4fb9b66679cfe49ff9a3f6712cfc3904f38feb8522f297e1fb231362f3b18aaa",
   "mandatory": false
 }

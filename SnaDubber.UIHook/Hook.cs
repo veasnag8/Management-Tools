@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.1.0";
+			window.Title = "SNA-Dubber Version 2.1.1";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -366,9 +366,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 2.0.1", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.1", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 2.0.1";
+				window.Title = "SNA-Dubber Version 2.1.1";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -615,7 +615,7 @@ public static class Hook
 			{
 				client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", deviceToken);
 			}
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.0");
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.1");
 
 			var payload = new
 			{
@@ -3349,7 +3349,9 @@ public static class Hook
 			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = "2.1.0";
+			string currentVer = typeof(Hook).Assembly.GetName().Version != null 
+				? $"{typeof(Hook).Assembly.GetName().Version.Major}.{typeof(Hook).Assembly.GetName().Version.Minor}.{typeof(Hook).Assembly.GetName().Version.Build}"
+				: "2.1.1";
 			string latestVer = currentVer;
 			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
@@ -3452,7 +3454,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.0");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.1");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3480,7 +3482,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.0");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.1");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -4498,9 +4500,19 @@ del ""%~f0""
 			{
 				player.MediaOpened += (s, e) =>
 				{
-					window.Dispatcher.BeginInvoke(new Action(() => ApplySocialAspectRatio(window, vm)));
+					window.Dispatcher.BeginInvoke(new Action(() =>
+					{
+						AutoDetectAndSelectAspectRatio(window, vm, player.NaturalVideoWidth, player.NaturalVideoHeight);
+						ApplySocialAspectRatio(window, vm);
+					}));
 				};
 				_isPlayerMediaOpenedHooked = true;
+			}
+
+			if (player != null && player.NaturalVideoWidth > 0 && player.NaturalVideoHeight > 0
+				&& !string.Equals(_lastAutoDetectedVideoPath, vm.CurrentProject?.VideoPath, StringComparison.OrdinalIgnoreCase))
+			{
+				AutoDetectAndSelectAspectRatio(window, vm, player.NaturalVideoWidth, player.NaturalVideoHeight);
 			}
 
 			// Dark backing for the border behind the viewport
@@ -4641,6 +4653,78 @@ del ""%~f0""
 	}
 
 	private static bool _userChangedPresetManually = false;
+	private static string _lastAutoDetectedVideoPath = null;
+
+	public static void AutoDetectAndSelectAspectRatio(Window window, MainViewModel vm, int naturalW = 0, int naturalH = 0)
+	{
+		try
+		{
+			if (vm == null || window == null || vm.SocialPresets == null || vm.SocialPresets.Count == 0) return;
+
+			string currentVideoPath = vm.CurrentProject?.VideoPath;
+			int w = naturalW;
+			int h = naturalH;
+
+			if (w <= 0 || h <= 0)
+			{
+				var player = FindVisualChild<MediaElement>((DependencyObject)(object)window, m => m.Name == "PreviewPlayer");
+				if (player != null && player.NaturalVideoWidth > 0 && player.NaturalVideoHeight > 0)
+				{
+					w = player.NaturalVideoWidth;
+					h = player.NaturalVideoHeight;
+				}
+			}
+
+			if ((w <= 0 || h <= 0) && !string.IsNullOrEmpty(currentVideoPath) && File.Exists(currentVideoPath))
+			{
+				var size = ProbeVideoSize(currentVideoPath);
+				w = size.width;
+				h = size.height;
+			}
+
+			if (w <= 0 || h <= 0) return;
+
+			bool isNewVideo = !string.Equals(_lastAutoDetectedVideoPath, currentVideoPath, StringComparison.OrdinalIgnoreCase);
+			if (isNewVideo)
+			{
+				_lastAutoDetectedVideoPath = currentVideoPath;
+				_userChangedPresetManually = false;
+			}
+
+			if (_userChangedPresetManually && !isNewVideo) return;
+
+			bool isPortrait = h > w;
+			SocialPreset targetPreset = null;
+			if (isPortrait)
+			{
+				targetPreset = vm.SocialPresets.FirstOrDefault(item => item.AspectRatioText == "9:16");
+			}
+			else
+			{
+				targetPreset = vm.SocialPresets.FirstOrDefault(item => item.AspectRatioText == "16:9" && item.Name.IndexOf("4K", StringComparison.OrdinalIgnoreCase) < 0)
+					?? vm.SocialPresets.FirstOrDefault(item => item.AspectRatioText == "16:9");
+			}
+
+			if (targetPreset != null && vm.SelectedSocialPreset != targetPreset)
+			{
+				vm.SelectedSocialPreset = targetPreset;
+				_isFrameFillMode = (targetPreset.AspectRatioText == "16:9");
+				vm.ProjectStatusMessage = $"Auto-detected {(isPortrait ? "Portrait (9:16)" : "Landscape (16:9)")} ({w}x{h})";
+				Log($"Auto-detected video aspect ratio: {w}x{h} -> {(isPortrait ? "9:16" : "16:9")}");
+
+				var host = FindVisualChild<StackPanel>((DependencyObject)(object)window, sp => sp.Children.OfType<Button>().Any(b => (b.Tag as string ?? "").StartsWith("SocialLandscapeButton")));
+				if (host != null)
+				{
+					UpdateFormatButtonsState(host, vm);
+				}
+				ApplySocialAspectRatio(window, vm);
+			}
+		}
+		catch (Exception ex)
+		{
+			Log("AutoDetectAndSelectAspectRatio error: " + ex.Message);
+		}
+	}
 
 	private static void WireSocialMediaPresets(Window window)
 	{
@@ -4703,8 +4787,12 @@ del ""%~f0""
 				SocialPreset squarePreset = vm.SocialPresets.FirstOrDefault(item => item.AspectRatioText == "1:1");
 				SocialPreset cinema4k = vm.SocialPresets.FirstOrDefault(item => item.Name.IndexOf("4K", StringComparison.OrdinalIgnoreCase) >= 0);
 
-				// Ensure Landscape (16:9) is the default on startup
-				if (!_userChangedPresetManually && youtube != null && vm.SelectedSocialPreset?.AspectRatioText != "16:9")
+				// Auto-detect aspect ratio if a video is already present; otherwise default to 16:9
+				if (HasCurrentVideoReference(vm))
+				{
+					AutoDetectAndSelectAspectRatio(window, vm);
+				}
+				else if (!_userChangedPresetManually && youtube != null && vm.SelectedSocialPreset?.AspectRatioText != "16:9")
 				{
 					vm.SelectedSocialPreset = youtube;
 					_isFrameFillMode = true;
@@ -4713,14 +4801,11 @@ del ""%~f0""
 				Action<SocialPreset> select = preset =>
 				{
 					if (preset == null) return;
-					_userChangedPresetManually = (preset.AspectRatioText != "16:9");
+					_userChangedPresetManually = true;
 					window.Dispatcher.Invoke(() =>
 					{
 						vm.SelectedSocialPreset = preset;
-						if (preset.AspectRatioText == "16:9")
-						{
-							_isFrameFillMode = true;
-						}
+						_isFrameFillMode = (preset.AspectRatioText == "16:9");
 						vm.ProjectStatusMessage = $"Social format: {preset.Name} ({preset.Width}x{preset.Height})";
 						UpdateFormatButtonsState(host, vm);
 						ApplySocialAspectRatio(window, vm);
@@ -4869,30 +4954,16 @@ del ""%~f0""
 
 				vm.PropertyChanged += (s, e) =>
 				{
-					if (e.PropertyName == "SelectedSocialPreset")
-					{
-						if (!_userChangedPresetManually && youtube != null && vm.SelectedSocialPreset?.AspectRatioText != "16:9")
-						{
-							window.Dispatcher.BeginInvoke(new Action(() =>
-							{
-								vm.SelectedSocialPreset = youtube;
-								_isFrameFillMode = true;
-							}));
-							return;
-						}
-					}
 					if (e.PropertyName == "CurrentProject" || e.PropertyName == "VideoPath" || e.PropertyName == "HasVideoLoaded")
 					{
-						if (!_userChangedPresetManually && youtube != null && vm.SelectedSocialPreset?.AspectRatioText != "16:9")
+						window.Dispatcher.BeginInvoke(new Action(() =>
 						{
-							window.Dispatcher.BeginInvoke(new Action(() =>
-							{
-								vm.SelectedSocialPreset = youtube;
-								_isFrameFillMode = true;
-							}));
-						}
+							AutoDetectAndSelectAspectRatio(window, vm);
+							UpdateFormatButtonsState(host, vm);
+							ApplySocialAspectRatio(window, vm);
+						}));
 					}
-					if (e.PropertyName == "SelectedSocialPreset" || e.PropertyName == "CurrentProject" || e.PropertyName == "VideoPath" || e.PropertyName == "HasVideoLoaded")
+					else if (e.PropertyName == "SelectedSocialPreset")
 					{
 						UpdateFormatButtonsState(host, vm);
 						ApplySocialAspectRatio(window, vm);
