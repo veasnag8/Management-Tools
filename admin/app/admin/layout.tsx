@@ -30,21 +30,21 @@ export default function AdminLayout({
 
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-[#060A16]">
         <div className="flex flex-col items-center space-y-3">
-          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-medium text-slate-600">Verifying session...</span>
+          <div className="w-9 h-9 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-semibold text-slate-400 tracking-wider">CONNECTING TO SNA GOD CORE...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-[#060A16] flex relative z-10 text-slate-100">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1520px] w-full mx-auto">
           {children}
         </main>
       </div>
