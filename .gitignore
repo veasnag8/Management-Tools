@@ -27,11 +27,14 @@ Output/
 Thumbs.db
 .DS_Store
 *.log
+__pycache__/
+*.pyc
 
 # Large Tools Binaries & Releases
 windows-client/Tool/Tools/ffmpeg.exe
 windows-client/Tool/Tools/ffprobe.exe
 windows-client/bin/
 windows-client/Output/
+*.zip
 
 *.tsbuildinfo

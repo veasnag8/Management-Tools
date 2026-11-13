@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.1.1";
+			window.Title = "SNA-Dubber Version 2.1.2";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -366,9 +366,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.1", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.2", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 2.1.1";
+				window.Title = "SNA-Dubber Version 2.1.2";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -505,7 +505,7 @@ public static class Hook
 				string[] lines = File.ReadAllLines(poolPath);
 				foreach (string line in lines)
 				{
-					string clean = line.Trim().Trim('"', '\'', '`');
+					string clean = line.Trim().Trim('"', '\'', '`', '\ufeff', '\u200b');
 					if (!string.IsNullOrWhiteSpace(clean) && !clean.StartsWith("#") && clean.Length > 10 && !keys.Contains(clean))
 					{
 						keys.Add(clean);
@@ -519,7 +519,7 @@ public static class Hook
 				string singlePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "gemini_api_key.txt");
 				if (File.Exists(singlePath))
 				{
-					string single = File.ReadAllText(singlePath).Trim().Trim('"', '\'', '`');
+					string single = File.ReadAllText(singlePath).Trim().Trim('"', '\'', '`', '\ufeff', '\u200b');
 					if (!string.IsNullOrWhiteSpace(single) && single.Length > 10 && !keys.Contains(single))
 					{
 						keys.Add(single);
@@ -534,7 +534,7 @@ public static class Hook
 				string[] parts = env.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
 				foreach (string p in parts)
 				{
-					string clean = p.Trim().Trim('"', '\'', '`');
+					string clean = p.Trim().Trim('"', '\'', '`', '\ufeff', '\u200b');
 					if (!string.IsNullOrWhiteSpace(clean) && clean.Length > 10 && !keys.Contains(clean))
 					{
 						keys.Add(clean);
@@ -556,19 +556,20 @@ public static class Hook
 			List<string> cleaned = new List<string>();
 			foreach (var k in keys)
 			{
-				string clean = (k ?? "").Trim().Trim('"', '\'', '`');
+				string clean = (k ?? "").Trim().Trim('"', '\'', '`', '\ufeff', '\u200b');
 				if (!string.IsNullOrWhiteSpace(clean) && clean.Length > 10 && !cleaned.Contains(clean))
 				{
 					cleaned.Add(clean);
 				}
 			}
 
+			UTF8Encoding utf8NoBom = new UTF8Encoding(false);
 			string poolPath = GetGeminiKeysPoolFilePath();
-			File.WriteAllLines(poolPath, cleaned, Encoding.UTF8);
+			File.WriteAllLines(poolPath, cleaned, utf8NoBom);
 
 			string primary = cleaned.FirstOrDefault() ?? "";
 			string singlePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "gemini_api_key.txt");
-			File.WriteAllText(singlePath, primary, Encoding.UTF8);
+			File.WriteAllText(singlePath, primary, utf8NoBom);
 
 			Environment.SetEnvironmentVariable("GEMINI_API_KEY", string.Join(",", cleaned), EnvironmentVariableTarget.Process);
 			try
@@ -615,7 +616,7 @@ public static class Hook
 			{
 				client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", deviceToken);
 			}
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.1");
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.2");
 
 			var payload = new
 			{
@@ -829,6 +830,17 @@ public static class Hook
 	{
 		try
 		{
+			string toolsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools");
+			if (Directory.Exists(toolsDir))
+			{
+				string curPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+				if (!curPath.Split(Path.PathSeparator).Any(p => string.Equals(p.Trim(), toolsDir, StringComparison.OrdinalIgnoreCase)))
+				{
+					Environment.SetEnvironmentVariable("PATH", toolsDir + Path.PathSeparator + curPath, EnvironmentVariableTarget.Process);
+					Log($"Added Tools directory to process PATH: {toolsDir}");
+				}
+			}
+
 			List<string> keys = LoadGeminiApiKeys();
 			if (keys.Count > 0)
 			{
@@ -2805,6 +2817,7 @@ public static class Hook
 
 			topTranscribe.Click += (s, e) =>
 			{
+				InitializeEnvironment();
 				if (vm == null) return;
 				if (vm.TranscribeAudioCommand != null && vm.TranscribeAudioCommand.CanExecute(null))
 				{
@@ -3001,7 +3014,7 @@ public static class Hook
 			var asmVer = typeof(Hook).Assembly.GetName().Version;
 			string currentVer = asmVer != null 
 				? (asmVer.Build >= 0 ? $"{asmVer.Major}.{asmVer.Minor}.{asmVer.Build}" : $"{asmVer.Major}.{asmVer.Minor}.0")
-				: "2.1.1";
+				: "2.1.2";
 			if (!string.IsNullOrEmpty(postUpdateVersion))
 			{
 				currentVer = postUpdateVersion;
@@ -3341,7 +3354,7 @@ public static class Hook
 			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 			TextBlock txtNotes = new TextBlock
 			{
-				Text = $"កំណែថ្មី Version {currentVer} រួមមាន:\n1. 📁 Episodes List Import from Folder: អាចនាំចូលវីដេអូច្រើនភាគពី Folder តែមួយ ឬជ្រើសរើស Files ជាច្រើន រួចចុច Translate Selected តែម្ដង\n2. 📷 Auto Video Aspect Ratio Detection: កម្មវិធីពិនិត្យទំហំវីដេអូដោយស្វ័យប្រវត្តិតាម Landscape (16:9) ឬ Portrait (9:16)\n3. 🔑 Gemini Multi-Key Pool Manager: អាចបន្ថែម API Key បានច្រើន ដើម្បីទទួលបាន Token ច្រើន\n4. ⚡ Live AI Energy Conduit Telemetry: ភ្ជាប់ Real Token Telemetry ទៅកាន់ SNA GOD Console",
+				Text = $"កំណែថ្មី Version {currentVer} រួមមាន:\n1. 🎙️ Fix Gemini Transcribe & Translate AI: កែសម្រួលបញ្ហា No Speech Detected និងបន្ថែមម៉ូឌែល Gemini 3.5 Flash ជំនាន់ថ្មី\n2. 🔊 Fix Video Playback Audio: កែសម្រួលសំឡេងវីដេអូដើម និងសំឡេង Preview ឱ្យឮច្បាស់ពេញលេញ\n3. 📁 Episodes List Import from Folder: អាចនាំចូលវីដេអូច្រើនភាគពី Folder តែមួយ ឬជ្រើសរើស Files ជាច្រើន រួចចុច Translate Selected តែម្ដង\n4. 🔑 Multi-Key Pool & High Performance Audio Extraction",
 				FontSize = 12.5,
 				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
 				TextWrapping = TextWrapping.Wrap,
@@ -3463,7 +3476,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.1");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.2");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3491,7 +3504,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.1");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.2");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -5988,10 +6001,25 @@ del ""%~f0""
 				try
 				{
 					bool isPreRendered = player.Source != null && player.Source.LocalPath.Contains("PreviewCache");
-					if (!isPreRendered)
+					if (isPreRendered)
 					{
-						player.IsMuted = true;
-						player.Volume = 0.0;
+						player.IsMuted = false;
+						player.Volume = 1.0;
+					}
+					else
+					{
+						bool hasKhmerAudio = vm.DialogueLines != null && vm.DialogueLines.Any(l => !string.IsNullOrEmpty(l.AudioFilePath) && File.Exists(l.AudioFilePath));
+						bool shouldMuteOriginal = (vm.AudioMix != null && vm.AudioMix.IsOriginalMuted) || hasKhmerAudio;
+						if (shouldMuteOriginal)
+						{
+							player.IsMuted = true;
+							player.Volume = 0.0;
+						}
+						else
+						{
+							player.IsMuted = false;
+							player.Volume = 1.0;
+						}
 					}
 				}
 				catch { }
@@ -6031,17 +6059,29 @@ del ""%~f0""
 					if (isPreRendered)
 					{
 						if (player.IsMuted) player.IsMuted = false;
+						if (player.Volume < 0.99) player.Volume = 1.0;
 						_previewLiveKhmerPlayer.Stop();
 						_previewLiveBgmPlayer.Stop();
 						_previewLivePlayingLineIndex = -1;
 						return;
 					}
 
-					// Raw original video: MUTE CHINESE AUDIO COMPLETELY
-					if (!player.IsMuted || player.Volume > 0.0)
+					// Raw original video: Mute only if original sound is disabled or Khmer audio is active
+					bool hasKhmerDub = vm.DialogueLines != null && vm.DialogueLines.Any(l => !string.IsNullOrEmpty(l.AudioFilePath) && File.Exists(l.AudioFilePath));
+					bool shouldMuteOriginalVideo = (vm.AudioMix != null && vm.AudioMix.IsOriginalMuted) || hasKhmerDub;
+
+					if (shouldMuteOriginalVideo)
 					{
-						player.IsMuted = true;
-						player.Volume = 0.0;
+						if (!player.IsMuted || player.Volume > 0.0)
+						{
+							player.IsMuted = true;
+							player.Volume = 0.0;
+						}
+					}
+					else
+					{
+						if (player.IsMuted) player.IsMuted = false;
+						if (player.Volume < 0.99) player.Volume = 1.0;
 					}
 
 					if (!vm.IsPlaying)
@@ -6247,6 +6287,8 @@ del ""%~f0""
 					MediaElement mediaElement = FindVisualChild((DependencyObject)(object)window, (MediaElement me) => me.Name == "PreviewPlayer");
 					if (mediaElement != null)
 					{
+						mediaElement.IsMuted = false;
+						mediaElement.Volume = 1.0;
 						mediaElement.Source = new Uri(previewVideo);
 						mediaElement.Position = TimeSpan.Zero;
 						vm.IsPlaying = false;
@@ -6358,6 +6400,8 @@ del ""%~f0""
 					MediaElement mediaElement = FindVisualChild((DependencyObject)(object)window, (MediaElement me) => me.Name == "PreviewPlayer");
 					if (mediaElement != null)
 					{
+						mediaElement.IsMuted = false;
+						mediaElement.Volume = 1.0;
 						mediaElement.Source = new Uri(pv);
 						mediaElement.Position = TimeSpan.Zero;
 						vm.IsPlaying = false;

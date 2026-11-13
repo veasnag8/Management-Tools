@@ -5,18 +5,20 @@
     <UseWPF>true</UseWPF>
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>2.1.1</Version>
-    <AssemblyVersion>2.1.1.0</AssemblyVersion>
-    <FileVersion>2.1.1.0</FileVersion>
+    <Version>2.1.2</Version>
+    <AssemblyVersion>2.1.2.0</AssemblyVersion>
+    <FileVersion>2.1.2.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="SnaDubber">
-      <HintPath>..\..\SNA-Dubber\SnaDubber.dll</HintPath>
+      <HintPath Condition="Exists('..\..\SNA-Dubber\SnaDubber.dll')">..\..\SNA-Dubber\SnaDubber.dll</HintPath>
+      <HintPath Condition="!Exists('..\..\SNA-Dubber\SnaDubber.dll')">$(LOCALAPPDATA)\Programs\Tool Dubber\SnaDubber.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="CommunityToolkit.Mvvm">
-      <HintPath>..\..\SNA-Dubber\CommunityToolkit.Mvvm.dll</HintPath>
+      <HintPath Condition="Exists('..\..\SNA-Dubber\CommunityToolkit.Mvvm.dll')">..\..\SNA-Dubber\CommunityToolkit.Mvvm.dll</HintPath>
+      <HintPath Condition="!Exists('..\..\SNA-Dubber\CommunityToolkit.Mvvm.dll')">$(LOCALAPPDATA)\Programs\Tool Dubber\CommunityToolkit.Mvvm.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
