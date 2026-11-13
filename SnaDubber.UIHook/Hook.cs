@@ -2998,6 +2998,15 @@ public static class Hook
 	{
 		try
 		{
+			var asmVer = typeof(Hook).Assembly.GetName().Version;
+			string currentVer = asmVer != null 
+				? (asmVer.Build >= 0 ? $"{asmVer.Major}.{asmVer.Minor}.{asmVer.Build}" : $"{asmVer.Major}.{asmVer.Minor}.0")
+				: "2.1.1";
+			if (!string.IsNullOrEmpty(postUpdateVersion))
+			{
+				currentVer = postUpdateVersion;
+			}
+
 			Window dialog = new Window
 			{
 				Title = "Auto Update Center - Tool Dubber",
@@ -3094,10 +3103,10 @@ public static class Hook
 
 			StackPanel verRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(new TextBlock { Text = "Current: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtCurVer = new TextBlock { Text = "v2.1.0", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtCurVer = new TextBlock { Text = $"v{currentVer}", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtCurVer);
 			verRow.Children.Add(new TextBlock { Text = "  →  Latest: ", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)), VerticalAlignment = VerticalAlignment.Center });
-			TextBlock txtLatestVer = new TextBlock { Text = "v2.1.0", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
+			TextBlock txtLatestVer = new TextBlock { Text = $"v{currentVer}", FontSize = 14, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)), VerticalAlignment = VerticalAlignment.Center };
 			verRow.Children.Add(txtLatestVer);
 			infoGrid.Children.Add(verRow);
 
@@ -3302,7 +3311,7 @@ public static class Hook
 
 			TextBlock txtNotesHeader = new TextBlock
 			{
-				Text = "📦 ព័ត៌មាន Update (v2.1.0):",
+				Text = $"📦 ព័ត៌មាន Update (v{currentVer}):",
 				FontSize = 13,
 				FontWeight = FontWeights.Bold,
 				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
@@ -3332,7 +3341,7 @@ public static class Hook
 			ScrollViewer svNotes = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 			TextBlock txtNotes = new TextBlock
 			{
-				Text = "កំណែថ្មី Version 2.1.0 រួមមាន:\n• Smart Auto-Analysis Updater: វិភាគដោយស្វ័យប្រវត្តិរវាង Fast Patch (< 1 MB) និង Full Installer (~140 MB)\n• CheckBox ក្នុង 📋 Episodes សម្រាប់ Tick ជ្រើសរើសភាគច្រើន/តិច រួច Translate Selected តែម្តង",
+				Text = $"កំណែថ្មី Version {currentVer} រួមមាន:\n1. 📁 Episodes List Import from Folder: អាចនាំចូលវីដេអូច្រើនភាគពី Folder តែមួយ ឬជ្រើសរើស Files ជាច្រើន រួចចុច Translate Selected តែម្ដង\n2. 📷 Auto Video Aspect Ratio Detection: កម្មវិធីពិនិត្យទំហំវីដេអូដោយស្វ័យប្រវត្តិតាម Landscape (16:9) ឬ Portrait (9:16)\n3. 🔑 Gemini Multi-Key Pool Manager: អាចបន្ថែម API Key បានច្រើន ដើម្បីទទួលបាន Token ច្រើន\n4. ⚡ Live AI Energy Conduit Telemetry: ភ្ជាប់ Real Token Telemetry ទៅកាន់ SNA GOD Console",
 				FontSize = 12.5,
 				Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
 				TextWrapping = TextWrapping.Wrap,
@@ -3349,9 +3358,6 @@ public static class Hook
 			dialog.Content = outerFrame;
 
 			// Logic & State
-			string currentVer = typeof(Hook).Assembly.GetName().Version != null 
-				? $"{typeof(Hook).Assembly.GetName().Version.Major}.{typeof(Hook).Assembly.GetName().Version.Minor}.{typeof(Hook).Assembly.GetName().Version.Build}"
-				: "2.1.1";
 			string latestVer = currentVer;
 			string latestNotesText = txtNotes.Text;
 			string downloadUrl = "";
@@ -3412,15 +3418,18 @@ public static class Hook
 
 			Action<bool> setUpdateBtnReady = (ready) =>
 			{
-				btnUpdate.IsEnabled = ready;
 				if (ready)
 				{
+					btnUpdate.IsEnabled = true;
+					btnUpdate.Content = "⬇ Download Update Now";
 					btnUpdate.Background = new SolidColorBrush(Color.FromRgb(2, 132, 199));
 					btnUpdate.Foreground = Brushes.White;
 					btnUpdate.BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248));
 				}
 				else
 				{
+					btnUpdate.IsEnabled = false;
+					btnUpdate.Content = "✓ Up to Date";
 					btnUpdate.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
 					btnUpdate.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
 					btnUpdate.BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85));
@@ -3542,7 +3551,8 @@ public static class Hook
 						}
 					}
 
-					txtLatestVer.Text = $"v{(hasUpdate ? latestVer : currentVer)}";
+					txtCurVer.Text = $"v{currentVer}";
+					txtLatestVer.Text = $"v{(hasUpdate ? latestVer : (!string.IsNullOrEmpty(latestVersionFound) ? latestVersionFound : currentVer))}";
 					progressBar.IsIndeterminate = false;
 
 					if (hasUpdate)
@@ -3606,7 +3616,7 @@ public static class Hook
 					try
 					{
 						using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(20) };
-						http.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.0");
+						http.DefaultRequestHeaders.UserAgent.ParseAdd($"ToolDubber/{currentVer}");
 
 						using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 						if (!resp.IsSuccessStatusCode) return false;
