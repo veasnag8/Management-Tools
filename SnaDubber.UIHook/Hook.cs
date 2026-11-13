@@ -4133,10 +4133,10 @@ del ""%~f0""
 				Title = "Episodes Batch Manager — Import & Translate",
 				Owner = owner,
 				WindowStartupLocation = WindowStartupLocation.CenterOwner,
-				Width = 740,
-				Height = 560,
-				MinWidth = 660,
-				MinHeight = 480,
+				Width = 780,
+				Height = 620,
+				MinWidth = 700,
+				MinHeight = 500,
 				ResizeMode = ResizeMode.CanResize,
 				ShowInTaskbar = false,
 				Background = new SolidColorBrush(Color.FromRgb(4, 10, 20)),
@@ -4163,6 +4163,27 @@ del ""%~f0""
 				tpl.Triggers.Add(dis);
 				btn.Template = tpl;
 			};
+
+			Action<ProgressBar> applyDarkProgressBar = pb =>
+			{
+				var tpl = new ControlTemplate(typeof(ProgressBar));
+				var track = new FrameworkElementFactory(typeof(Border), "PART_Track");
+				track.SetValue(Border.CornerRadiusProperty, new CornerRadius(3));
+				track.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(15, 23, 42)));
+				track.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(30, 41, 59)));
+				track.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+
+				var ind = new FrameworkElementFactory(typeof(Border), "PART_Indicator");
+				ind.SetValue(Border.CornerRadiusProperty, new CornerRadius(3));
+				ind.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
+				ind.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Foreground") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent) });
+
+				track.AppendChild(ind);
+				tpl.VisualTree = track;
+				pb.Template = tpl;
+			};
+
+			var rowProgressMap = new Dictionary<EpisodeItem, (ProgressBar Bar, TextBlock Pct, TextBlock Status, Border Pill, TextBlock PillText)>();
 
 			StackPanel header = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
 			TextBlock txtHeaderTitle = new TextBlock
@@ -4292,6 +4313,7 @@ del ""%~f0""
 			{
 				listPanel.Children.Clear();
 				selectedChecks.Clear();
+				rowProgressMap.Clear();
 
 				var realEpisodes = vm.Episodes?
 					.Where(ep => !string.IsNullOrEmpty(ep.VideoPath) || ep.TranscriptionStatus == "Splitting" || ep.TranscriptionStatus == "Ready" || ep.TranscriptionStatus == "Error" || ep.TranscriptionStatus == "Translating" || ep.TranscriptionStatus == "Exported")
@@ -4403,7 +4425,7 @@ del ""%~f0""
 						Grid.SetColumn(epCheck, 0);
 						row.Children.Add(epCheck);
 
-						StackPanel info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+						StackPanel info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) };
 						info.Children.Add(new TextBlock
 						{
 							Text = $"{ep.Title}   •   {ep.DurationText}",
@@ -4418,6 +4440,51 @@ del ""%~f0""
 							FontSize = 11,
 							Margin = new Thickness(0, 2, 0, 0)
 						});
+
+						Grid progressGrid = new Grid { Margin = new Thickness(0, 6, 0, 0) };
+						progressGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+						progressGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+						ProgressBar epProgressBar = new ProgressBar
+						{
+							Height = 6,
+							Minimum = 0,
+							Maximum = 100,
+							Value = ep.TranscriptionStatus == "Exported" ? 100 : 0,
+							Foreground = ep.TranscriptionStatus == "Exported" 
+								? new SolidColorBrush(Color.FromRgb(16, 185, 129)) 
+								: new LinearGradientBrush(Color.FromRgb(56, 189, 248), Color.FromRgb(124, 58, 237), 0),
+							Background = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
+							BorderThickness = new Thickness(0),
+							VerticalAlignment = VerticalAlignment.Center,
+							Margin = new Thickness(0, 0, 10, 0)
+						};
+						applyDarkProgressBar(epProgressBar);
+
+						TextBlock txtProgressPct = new TextBlock
+						{
+							Text = ep.TranscriptionStatus == "Exported" ? "100%" : (ep.TranscriptionStatus == "Translating" ? "0%" : "Ready"),
+							Foreground = ep.TranscriptionStatus == "Exported" ? new SolidColorBrush(Color.FromRgb(52, 211, 153)) : new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+							FontSize = 11,
+							FontWeight = FontWeights.Bold,
+							VerticalAlignment = VerticalAlignment.Center
+						};
+
+						Grid.SetColumn(epProgressBar, 0);
+						Grid.SetColumn(txtProgressPct, 1);
+						progressGrid.Children.Add(epProgressBar);
+						progressGrid.Children.Add(txtProgressPct);
+						info.Children.Add(progressGrid);
+
+						TextBlock txtProgressStatus = new TextBlock
+						{
+							Text = ep.TranscriptionStatus == "Exported" ? "✓ រួចរាល់ (Exported)" : "រង់ចាំការបកប្រែ (Ready)",
+							Foreground = mutedBrush,
+							FontSize = 10.5,
+							Margin = new Thickness(0, 2, 0, 0)
+						};
+						info.Children.Add(txtProgressStatus);
+
 						Grid.SetColumn(info, 1);
 						row.Children.Add(info);
 
@@ -4433,19 +4500,23 @@ del ""%~f0""
 						{
 							Background = new SolidColorBrush(pillColor),
 							CornerRadius = new CornerRadius(10),
-							Padding = new Thickness(10, 3, 10, 3),
+							Padding = new Thickness(10, 4, 10, 4),
 							Margin = new Thickness(10, 0, 10, 0),
+							MinWidth = 65,
 							VerticalAlignment = VerticalAlignment.Center,
 							Child = new TextBlock
 							{
 								Text = string.IsNullOrEmpty(ep.TranscriptionStatus) ? "Ready" : ep.TranscriptionStatus,
 								Foreground = Brushes.White,
 								FontSize = 11,
-								FontWeight = FontWeights.SemiBold
+								FontWeight = FontWeights.SemiBold,
+								HorizontalAlignment = HorizontalAlignment.Center
 							}
 						};
 						Grid.SetColumn(statusPill, 2);
 						row.Children.Add(statusPill);
+
+						rowProgressMap[ep] = (epProgressBar, txtProgressPct, txtProgressStatus, statusPill, (TextBlock)statusPill.Child);
 
 						Button loadBtn = new Button
 						{
@@ -4685,8 +4756,97 @@ del ""%~f0""
 					.Select(x => x.Episode)
 					.ToList();
 				if (chosen.Count == 0) return;
-				dialog.Close();
-				await TranslateSelectedEpisodesAsync(owner, vm, chosen);
+
+				btnImportFolder.IsEnabled = false;
+				btnAddFiles.IsEnabled = false;
+				btnSelAll.IsEnabled = false;
+				btnSelNone.IsEnabled = false;
+				btnClearAll.IsEnabled = false;
+				translateSelectedBtn.IsEnabled = false;
+				foreach (var pair in selectedChecks) pair.Box.IsEnabled = false;
+
+				foreach (var ep in chosen)
+				{
+					if (rowProgressMap.TryGetValue(ep, out var r))
+					{
+						r.Bar.Value = 0;
+						r.Bar.Foreground = new LinearGradientBrush(Color.FromRgb(56, 189, 248), Color.FromRgb(124, 58, 237), 0);
+						r.Pct.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+						r.Pct.Text = "0%";
+						r.Status.Text = "រង់ចាំក្នុងជួរ (Queued)...";
+						r.Pill.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
+						r.PillText.Text = "Queued";
+					}
+				}
+
+				Action<EpisodeItem, double, string> progressCallback = (ep, pct, stepName) =>
+				{
+					dialog.Dispatcher.Invoke(() =>
+					{
+						if (rowProgressMap.TryGetValue(ep, out var r))
+						{
+							if (pct < 0)
+							{
+								r.Bar.Value = 100;
+								r.Bar.Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+								r.Pct.Foreground = new SolidColorBrush(Color.FromRgb(248, 113, 113));
+								r.Pct.Text = "✕ Error";
+								r.Status.Text = stepName ?? "បរាជ័យ";
+								r.Pill.Background = new SolidColorBrush(Color.FromRgb(153, 27, 27));
+								r.PillText.Text = "Error";
+							}
+							else
+							{
+								double clamped = Math.Clamp(pct, 0, 100);
+								r.Bar.Value = clamped;
+								if (clamped >= 100)
+								{
+									r.Bar.Foreground = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+									r.Pct.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+									r.Pct.Text = "100%";
+									r.Status.Text = "✓ រួចរាល់ (Exported)";
+									r.Pill.Background = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+									r.PillText.Text = "100% ✓";
+								}
+								else
+								{
+									r.Bar.Foreground = new LinearGradientBrush(Color.FromRgb(56, 189, 248), Color.FromRgb(124, 58, 237), 0);
+									r.Pct.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+									r.Pct.Text = $"{Math.Round(clamped)}%";
+									r.Status.Text = stepName ?? "កំពុងបកប្រែ...";
+									r.Pill.Background = new SolidColorBrush(Color.FromRgb(124, 58, 237));
+									r.PillText.Text = $"{Math.Round(clamped)}%";
+								}
+							}
+						}
+					});
+				};
+
+				Action<int, int, double> overallCallback = (cur, tot, p) =>
+				{
+					dialog.Dispatcher.Invoke(() =>
+					{
+						translateSelectedBtn.Content = $"⏳ Translating ({cur}/{tot}) • {Math.Round(p)}%";
+					});
+				};
+
+				try
+				{
+					await TranslateSelectedEpisodesAsync(owner, vm, chosen, progressCallback, overallCallback);
+				}
+				finally
+				{
+					dialog.Dispatcher.Invoke(() =>
+					{
+						btnImportFolder.IsEnabled = true;
+						btnAddFiles.IsEnabled = true;
+						btnSelAll.IsEnabled = true;
+						btnSelNone.IsEnabled = true;
+						btnClearAll.IsEnabled = true;
+						foreach (var pair in selectedChecks) pair.Box.IsEnabled = !string.IsNullOrEmpty(pair.Episode.VideoPath) && File.Exists(pair.Episode.VideoPath);
+						refreshSelectedCount();
+					});
+				}
 			};
 			Grid.SetColumn(translateSelectedBtn, 2);
 			footer.Children.Add(translateSelectedBtn);
@@ -4732,7 +4892,12 @@ del ""%~f0""
 		}
 	}
 
-	private static async Task TranslateSelectedEpisodesAsync(Window owner, MainViewModel vm, List<EpisodeItem> selected)
+	private static async Task TranslateSelectedEpisodesAsync(
+		Window owner, 
+		MainViewModel vm, 
+		List<EpisodeItem> selected, 
+		Action<EpisodeItem, double, string> onProgress = null, 
+		Action<int, int, double> onOverallProgress = null)
 	{
 		if (selected == null || selected.Count == 0) return;
 		string baseFolder = !string.IsNullOrEmpty(selected[0].VideoPath) && File.Exists(selected[0].VideoPath)
@@ -4745,35 +4910,67 @@ del ""%~f0""
 		int done = 0;
 		try
 		{
-			foreach (EpisodeItem ep in selected)
+			for (int epIdx = 0; epIdx < selected.Count; epIdx++)
 			{
+				EpisodeItem ep = selected[epIdx];
+				int curEpNum = epIdx + 1;
 				try
 				{
 					ep.TranscriptionStatus = "Translating";
+					onProgress?.Invoke(ep, 5.0, "កំពុងចាប់ផ្ដើមទាញយកវីដេអូ...");
+					onOverallProgress?.Invoke(curEpNum, selected.Count, 5.0);
+
 					vm.BusyProgressPercent = done * 100.0 / selected.Count;
-					vm.BusyStatusText = $"Episode {ep.Number}: translating to Khmer ({done + 1}/{selected.Count})...";
+					vm.BusyStatusText = $"Episode {ep.Number}: translating to Khmer ({curEpNum}/{selected.Count})...";
 
-					await vm.LoadVideoFileAsync(ep.VideoPath);
-					if (vm.TranscribeAudioCommand != null) await vm.TranscribeAudioCommand.ExecuteAsync(null);
-					await RunFullPipelineAsync(vm, owner);
+					System.ComponentModel.PropertyChangedEventHandler subHandler = (s, pe) =>
+					{
+						if (pe.PropertyName == nameof(vm.BusyProgressPercent) || pe.PropertyName == nameof(vm.BusyStatusText))
+						{
+							double subPct = Math.Clamp(vm.BusyProgressPercent, 10.0, 95.0);
+							string txt = vm.BusyStatusText;
+							onProgress?.Invoke(ep, subPct, txt);
+							onOverallProgress?.Invoke(curEpNum, selected.Count, subPct);
+						}
+					};
 
-					vm.BusyStatusText = $"Episode {ep.Number}: exporting Khmer video...";
-					string originalName = Path.GetFileNameWithoutExtension(ep.VideoPath);
-					string finalPath = Path.Combine(khmerOutDir, $"{originalName}_Khmer.mp4");
-					IEnumerable<OverlayItem> exportOverlays = AddTextLayersToExportOverlays(vm.Overlays, vm.TextLayers);
-					FieldInfo ffmpegField = typeof(MainViewModel).GetField("_ffmpegService", BindingFlags.Instance | BindingFlags.NonPublic);
-					if (ffmpegField?.GetValue(vm) is not IFFmpegService ffmpeg) throw new InvalidOperationException("FFmpeg export service is unavailable.");
-					SocialPreset preset = vm.SelectedSocialPreset ?? vm.SocialPresets.First();
-					bool ok = await ffmpeg.ExportVideoAsync(ep.VideoPath, finalPath, preset, vm.BlurRegions, exportOverlays, vm.TextLayers, vm.DialogueLines, vm.AudioMix, null, CancellationToken.None);
-					if (!ok || !File.Exists(finalPath)) throw new InvalidOperationException("Final episode export was not created.");
+					vm.PropertyChanged += subHandler;
+					try
+					{
+						await vm.LoadVideoFileAsync(ep.VideoPath);
+						onProgress?.Invoke(ep, 15.0, "ជំហាន 1/6: ទាញយកអត្ថបទពីវីដេអូ...");
 
-					ep.TranscriptionStatus = "Exported";
-					done++;
-					vm.BusyProgressPercent = done * 100.0 / selected.Count;
+						if (vm.TranscribeAudioCommand != null) 
+							await vm.TranscribeAudioCommand.ExecuteAsync(null);
+
+						onProgress?.Invoke(ep, 30.0, "ជំហាន 2/6: កំពុងពិនិត្យ និងបកប្រែ...");
+						await RunFullPipelineAsync(vm, owner);
+
+						onProgress?.Invoke(ep, 88.0, "ជំហាន 6/6: កំពុង Export វីដេអូខ្មែរ...");
+						string originalName = Path.GetFileNameWithoutExtension(ep.VideoPath);
+						string finalPath = Path.Combine(khmerOutDir, $"{originalName}_Khmer.mp4");
+						IEnumerable<OverlayItem> exportOverlays = AddTextLayersToExportOverlays(vm.Overlays, vm.TextLayers);
+						FieldInfo ffmpegField = typeof(MainViewModel).GetField("_ffmpegService", BindingFlags.Instance | BindingFlags.NonPublic);
+						if (ffmpegField?.GetValue(vm) is not IFFmpegService ffmpeg) throw new InvalidOperationException("FFmpeg export service is unavailable.");
+						SocialPreset preset = vm.SelectedSocialPreset ?? vm.SocialPresets.First();
+						bool ok = await ffmpeg.ExportVideoAsync(ep.VideoPath, finalPath, preset, vm.BlurRegions, exportOverlays, vm.TextLayers, vm.DialogueLines, vm.AudioMix, null, CancellationToken.None);
+						if (!ok || !File.Exists(finalPath)) throw new InvalidOperationException("Final episode export was not created.");
+
+						ep.TranscriptionStatus = "Exported";
+						done++;
+						vm.BusyProgressPercent = done * 100.0 / selected.Count;
+						onProgress?.Invoke(ep, 100.0, "✓ រួចរាល់ (Exported)");
+						onOverallProgress?.Invoke(curEpNum, selected.Count, 100.0);
+					}
+					finally
+					{
+						vm.PropertyChanged -= subHandler;
+					}
 				}
 				catch (Exception ex)
 				{
 					ep.TranscriptionStatus = "Error";
+					onProgress?.Invoke(ep, -1.0, $"✕ បរាជ័យ: {ex.Message}");
 					Log($"TranslateSelectedEpisodesAsync Episode {ep.Number} error: {ex}");
 				}
 				finally
