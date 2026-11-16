@@ -585,7 +585,7 @@ public static class Hook
 		}
 	}
 
-	private static async Task PostTokenTelemetryAsync(int totalTokens, int promptTokens = 0, int completionTokens = 0, string modelName = "gemini-2.5-flash", int keysCount = 1)
+	private static async Task PostTokenTelemetryAsync(int totalTokens, int promptTokens = 0, int completionTokens = 0, string modelName = "gemini-3.5-flash", int keysCount = 1)
 	{
 		try
 		{
@@ -623,7 +623,7 @@ public static class Hook
 				tokens = totalTokens,
 				prompt_tokens = promptTokens,
 				completion_tokens = completionTokens,
-				model_name = string.IsNullOrEmpty(modelName) ? "gemini-2.5-flash" : modelName,
+				model_name = string.IsNullOrEmpty(modelName) ? "gemini-3.5-flash" : modelName,
 				task_type = "translate",
 				task_description = $"Gemini AI Translation ({keysCount} Key Pool)",
 				active_keys_count = keysCount,
@@ -6610,7 +6610,7 @@ del ""%~f0""
 				api_key = api_key,
 				api_keys = keys,
 				context = "Movie Dialogue Dubbing",
-				model_name = "gemini-2.5-flash",
+				model_name = "gemini-3.5-flash",
 				dialogue = list
 			});
 			string tempJson = Path.GetTempFileName();
@@ -6699,7 +6699,7 @@ del ""%~f0""
 						int totalTok = usageElem.TryGetProperty("total_tokens", out var tt) ? tt.GetInt32() : 0;
 						int promptTok = usageElem.TryGetProperty("prompt_tokens", out var pt) ? pt.GetInt32() : 0;
 						int compTok = usageElem.TryGetProperty("completion_tokens", out var ct) ? ct.GetInt32() : 0;
-						string modelUsed = usageElem.TryGetProperty("last_model_used", out var lmu) ? (lmu.GetString() ?? "gemini-2.5-flash") : "gemini-2.5-flash";
+						string modelUsed = usageElem.TryGetProperty("last_model_used", out var lmu) ? (lmu.GetString() ?? "gemini-3.5-flash") : "gemini-3.5-flash";
 						int activeKeys = usageElem.TryGetProperty("active_keys", out var ak) ? ak.GetInt32() : keys.Count;
 						if (totalTok > 0)
 						{

@@ -4,10 +4,10 @@
   "latest_version": "2.1.2",
   "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.2/ToolDubber-Setup-v2.1.2.exe",
   "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.2/ToolDubber-Patch-v2.1.2.zip",
-  "patch_sha256": "f5781ca1798a2e1da884a1698765ef33157e47a9c8a9689e4568a8dec4b88489",
-  "patch_size_bytes": 173629,
+  "patch_sha256": "a08f57df63ccda765414e8946850b2c92a6bf5fc53097cf2c0a24ce19c0d3155",
+  "patch_size_bytes": 174909,
   "min_patch_version": "2.0.0",
-  "release_notes": "កំណែថ្មី Version 2.1.2 រួមមាន:\n1. ⚡ Auto-Fix Audio Overlaps (ជួសជុលសំឡេងជាន់គ្នា)៖ Gemini បកប្រែខ្លីខ្លឹមសមល្មមតាមកាលវេលា និងប្រព័ន្ធ FFmpeg atempo កែសម្រួលល្បឿនដោយស្វ័យប្រវត្តិ ធានាថាសំឡេងនិយាយមិនជាន់គ្នាដាច់ខាត ព្រមទាំងមានប៊ូតុង ⚡ Fix Overlaps លើ Menu\n2. 🔊 Default Voice Speed 1.25x (58%)៖ កំណត់ល្បឿនសំឡេង Voice Speed លំនាំដើមត្រឹម 1.25x (=58% លើ Slider) ច្បាស់ ពីរោះ ស្តាប់ស្រួលបែបធម្មជាតិ\n3. 🚀 Fast Translation & Polishing៖ បង្កើនល្បឿនបកប្រែសាច់រឿងរហ័សទ្វេដង (ដកចេញ delay ចាស់ៗ បកប្រែម្តង 50 បន្ទាត់លឿនដូចផ្លេកបន្ទោរ)\n4. 🎙️ Fix No Speech Detected Error៖ បន្ថែម Dynamic Audio Normalization & Multi-Key Pool Failover ចាប់យកសំឡេងនិយាយក្នុងវីដេអូច្បាស់ល្អ មិនខ្លាចភ្លេងកំដរ\n5. 👥 Auto Gender Recognition (ប្រុស-ស្រី)៖ សម្គាល់សំឡេងមនុស្សប្រុស (Piseth) និងមនុស្សស្រី (Sreymom) ដោយស្វ័យប្រវត្តិតាមរយៈតួអង្គ និងសំនៀង",
-  "sha256": "91148c7f383d3e5d0794a149cdc6e49883ba196309b0c8aa054a796a45b3aceb",
+  "release_notes": "កំណែថ្មី Version 2.1.2 រួមមាន:\n1. ⚡ High-Speed Chunked Transcription & No Hang៖ ដោះស្រាយបញ្ហាគាំងនៅ 48% ដោយបែងចែកសម្លេងជា Chunk ដំណើរការស្របគ្នា (Parallel) ឆាប់រហ័សទោះបីវីដេអូវែង 30+ នាទីក៏ដោយ\n2. 🚀 Support All Gemini Keys (gemini-3.5-flash)៖ គាំទ្រទាំង Key ចាស់ និង Key ជំនាន់ថ្មីទាំងអស់ មិនមានបញ្ហា 404 Model Not Found\n3. ⚡ Auto-Fix Audio Overlaps (ជួសជុលសំឡេងជាន់គ្នា)៖ Gemini បកប្រែខ្លីខ្លឹមសមល្មមតាមកាលវេលា និងប្រព័ន្ធ FFmpeg atempo កែសម្រួលល្បឿនដោយស្វ័យប្រវត្តិ ធានាថាសំឡេងនិយាយមិនជាន់គ្នាដាច់ខាត\n4. 🔊 Default Voice Speed 1.25x (58%)៖ កំណត់ល្បឿនសំឡេង Voice Speed លំនាំដើមត្រឹម 1.25x (=58% លើ Slider) ច្បាស់ ពីរោះ ស្តាប់ស្រួលបែបធម្មជាតិ\n5. 👥 Auto Gender Recognition (ប្រុស-ស្រី)៖ សម្គាល់សំឡេងមនុស្សប្រុស (Piseth) និងមនុស្សស្រី (Sreymom) ដោយស្វ័យប្រវត្តិតាមរយៈតួអង្គ និងសំនៀង",
+  "sha256": "fbad35cfe91f1693d48c3168af46eb3176d25256fc43362b120b2431d1c3e3ff",
   "mandatory": false
 }

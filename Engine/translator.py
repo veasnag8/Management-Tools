@@ -289,11 +289,13 @@ def _translate_chunk_with_pool(
         "Return JSON only: [{\"index\":1,\"draft_khmer\":\"...\",\"corrected_khmer\":\"...\",\"gender\":\"male|female\",\"voice\":\"piset|sreymom\"}]"
     )
 
-    valid_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]
-    chosen_model = model_name if model_name in valid_models else "gemini-2.5-flash"
+    valid_models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-latest"]
+    chosen_model = model_name if model_name in valid_models else "gemini-3.5-flash"
     models_to_try = [chosen_model] + [m for m in valid_models if m != chosen_model]
 
-    while pool.has_keys():
+    for _ in range(len(pool.keys)):
+        if not pool.has_keys():
+            break
         client, types, key = pool.get_client()
         if not client or not types:
             break
@@ -342,7 +344,7 @@ def translate_dialogue_batch(
     dialogue_items: List[Dict[str, Any]],
     api_key_or_keys: Any,
     movie_context: str = "Chinese Drama / Movie",
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = "gemini-3.5-flash",
     return_usage: bool = False
 ) -> Any:
     """Translates dialogue lines from Chinese to natural Khmer with Multi-Key Pooling and intelligent fallback."""
@@ -431,7 +433,7 @@ def regenerate_single_line(
     speaker: str = "Character",
     emotion: str = "Normal",
     scene_context: str = "",
-    model_name: str = "gemini-2.5-flash"
+    model_name: str = "gemini-3.5-flash"
 ) -> Dict[str, str]:
     """Regenerates translation for a single dialogue line."""
     items = [{
