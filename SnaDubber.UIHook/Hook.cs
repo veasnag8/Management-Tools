@@ -2833,6 +2833,68 @@ public static class Hook
 			Button anchorBtn = episodesBtn ?? splitBtn;
 			int insertIndex = anchorBtn != null ? topHost.Children.IndexOf(anchorBtn) + 1 : topHost.Children.Count;
 			topHost.Children.Insert(Math.Min(topHost.Children.Count, Math.Max(0, insertIndex)), topTranscribe);
+
+			if (!topHost.Children.OfType<Button>().Any(b => (b.Tag as string ?? "").StartsWith("AutoFixOverlapsButton")))
+			{
+				Button fixOverlapsBtn = new Button
+				{
+					Tag = "AutoFixOverlapsButton",
+					Content = "⚡ Fix Overlaps",
+					ToolTip = "Auto-fit dialogue audio speed so voices never overlap or clash (កែសម្រួលកុំឱ្យសំឡេងនិយាយជាន់គ្នា)",
+					Background = new LinearGradientBrush(Color.FromRgb(14, 116, 144), Color.FromRgb(3, 105, 161), 45),
+					BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+					BorderThickness = new Thickness(1.2),
+					Foreground = Brushes.White,
+					FontWeight = FontWeights.SemiBold,
+					FontSize = 11.5,
+					Height = 32.0,
+					Padding = new Thickness(12, 5, 12, 5),
+					Margin = new Thickness(6, 0, 8, 0),
+					VerticalAlignment = VerticalAlignment.Center,
+					Cursor = Cursors.Hand
+				};
+				SetControlCornerRadius(fixOverlapsBtn, 8);
+				AttachModernHover(fixOverlapsBtn,
+					hoverBackground: new LinearGradientBrush(Color.FromRgb(2, 132, 199), Color.FromRgb(14, 165, 233), 45),
+					hoverBorder: new SolidColorBrush(Color.FromRgb(186, 230, 253)));
+
+				fixOverlapsBtn.Click += async (s, e) =>
+				{
+					if (vm == null || vm.DialogueLines == null || vm.DialogueLines.Count == 0)
+					{
+						MessageBox.Show("Please transcribe or load dialogue lines first.", "No Dialogues", MessageBoxButton.OK, MessageBoxImage.Information);
+						return;
+					}
+					vm.BusyStatusText = "Checking & auto-fitting audio so voices never clash...";
+					vm.IsBusy = true;
+					try
+					{
+						int count = await AutoFixAllDialogueOverlapsAsync(vm);
+						if (count > 0)
+						{
+							await vm.SaveProjectAsync();
+							vm.ProjectStatusMessage = $"✓ Successfully auto-fitted {count} dialogue lines! Voices will no longer clash.";
+						}
+						else
+						{
+							vm.ProjectStatusMessage = "✓ All dialogue lines are already well-spaced and fit perfectly.";
+						}
+					}
+					catch (Exception exFix)
+					{
+						vm.ProjectStatusMessage = "Error auto-fixing audio: " + exFix.Message;
+					}
+					finally
+					{
+						vm.IsBusy = false;
+					}
+				};
+
+				int tIdx = topHost.Children.IndexOf(topTranscribe);
+				int insIdx = (tIdx >= 0) ? tIdx + 1 : topHost.Children.Count;
+				topHost.Children.Insert(Math.Min(topHost.Children.Count, Math.Max(0, insIdx)), fixOverlapsBtn);
+			}
+
 			_isTranscribeTopHooked = true;
 			Log("Successfully placed Transcribe & Translate AI button in top header bar next to Split Videos!");
 		}
@@ -5815,15 +5877,15 @@ del ""%~f0""
 		}
 
 		_voiceSpeedViewModel = vm;
-		// The original application initializes speech speed to 1x. Treat that
-		// untouched value as the default and start Khmer synthesis at 2x.
+		// User requested: Voice Speed default 1.25x (=58% on slider)
 		// Explicit non-default values loaded from a project remain unchanged.
-		bool appliedTwoTimesDefault = Math.Abs(NormalizeVoiceSpeed(vm.VoiceSpeed) - 1.0) < 0.0001;
-		if (appliedTwoTimesDefault)
+		bool isDefaultSpeed = Math.Abs(NormalizeVoiceSpeed(vm.VoiceSpeed) - 1.0) < 0.0001
+			|| Math.Abs(NormalizeVoiceSpeed(vm.VoiceSpeed) - 2.0) < 0.0001;
+		if (isDefaultSpeed)
 		{
-			vm.VoiceSpeed = 2.0;
+			vm.VoiceSpeed = 1.25;
 		}
-		ApplyVoiceSpeedToAllLines(vm, invalidateExistingAudio: appliedTwoTimesDefault);
+		ApplyVoiceSpeedToAllLines(vm, invalidateExistingAudio: isDefaultSpeed);
 
 		vm.PropertyChanged += (object? sender, PropertyChangedEventArgs args) =>
 		{
@@ -6259,7 +6321,8 @@ del ""%~f0""
 						await SynthesizeSingleLineSafelyAsync(vm, dialogueLine);
 					}
 				}
-				SetPipelineStatus(vm, "ជំហាន 5/6៖ រក្សាទុកអត្ថបទ ពេលវេលា និងឯកសារសំឡេង...");
+				SetPipelineStatus(vm, "ជំហាន 5/6៖ ពិនិត្យសម្រួល និងកែសម្រួលកុំឱ្យសំឡេងនិយាយជាន់គ្នា...");
+				await AutoFixAllDialogueOverlapsAsync(vm);
 				try
 				{
 					await vm.SaveProjectAsync();
@@ -6387,6 +6450,7 @@ del ""%~f0""
 			{
 				return;
 			}
+			await AutoFixAllDialogueOverlapsAsync(vm);
 			vm.BusyStatusText = "Step 3/3: Mixing Khmer voices and building preview video...";
 			string pv = await BuildPreviewVideoAsync(vm);
 			if (_cancelRequested)
@@ -6534,7 +6598,10 @@ del ""%~f0""
 					speaker = line.Speaker,
 					chinese = line.ChineseText,
 					draft_khmer = line.DraftKhmer ?? "",
-					corrected_khmer = ""
+					corrected_khmer = "",
+					start_ms = line.StartMs,
+					end_ms = line.EndMs,
+					dur = Math.Max(500, line.EndMs - line.StartMs)
 				});
 			}
 			string contents = JsonSerializer.Serialize(new
@@ -6543,7 +6610,7 @@ del ""%~f0""
 				api_key = api_key,
 				api_keys = keys,
 				context = "Movie Dialogue Dubbing",
-				model_name = "gemini-3.5-flash-lite",
+				model_name = "gemini-2.5-flash",
 				dialogue = list
 			});
 			string tempJson = Path.GetTempFileName();
@@ -6585,13 +6652,22 @@ del ""%~f0""
 			using JsonDocument jsonDocument = JsonDocument.Parse(stdout.Substring(num, num2 - num + 1));
 			if (jsonDocument.RootElement.TryGetProperty("dialogue", out var value) && value.ValueKind == JsonValueKind.Array)
 			{
-				Dictionary<int, (string draft, string corrected)> transMap = new Dictionary<int, (string, string)>();
+				Dictionary<int, (string draft, string corrected, string voice)> transMap = new Dictionary<int, (string, string, string)>();
 				foreach (JsonElement item3 in value.EnumerateArray())
 				{
 					int @int = item3.GetProperty("index").GetInt32();
 					string item = (item3.TryGetProperty("draft_khmer", out var value2) ? value2.GetString() : "");
 					string item2 = (item3.TryGetProperty("corrected_khmer", out var value3) ? value3.GetString() : "");
-					transMap[@int] = (item, item2);
+					string vProf = "";
+					if (item3.TryGetProperty("voice", out var vVal) && !string.IsNullOrWhiteSpace(vVal.GetString()))
+					{
+						vProf = vVal.GetString().Trim().ToLowerInvariant();
+					}
+					else if (item3.TryGetProperty("gender", out var gVal) && !string.IsNullOrWhiteSpace(gVal.GetString()))
+					{
+						vProf = (gVal.GetString().Trim().ToLowerInvariant() == "female") ? "sreymom" : "piset";
+					}
+					transMap[@int] = (item, item2, vProf);
 				}
 				Application current3 = Application.Current;
 				if (current3 != null)
@@ -6603,9 +6679,12 @@ del ""%~f0""
 						{
 							foreach (DialogueLine line2 in lines)
 							{
-								if (transMap.TryGetValue(line2.Index, out (string, string) value4) && !string.IsNullOrWhiteSpace(value4.Item2))
+								if (transMap.TryGetValue(line2.Index, out (string, string, string) value4) && !string.IsNullOrWhiteSpace(value4.Item2))
 								{
-									(line2.DraftKhmer, line2.CorrectedKhmer) = value4;
+									line2.DraftKhmer = value4.Item1;
+									line2.CorrectedKhmer = value4.Item2;
+									string chosenVoice = !string.IsNullOrEmpty(value4.Item3) ? value4.Item3 : DetectGenderVoice(line2);
+									line2.VoiceProfile = chosenVoice;
 								}
 							}
 						}));
@@ -6643,6 +6722,198 @@ del ""%~f0""
 		return false;
 	}
 
+	public static string DetectGenderVoice(DialogueLine line)
+	{
+		if (line == null) return "piset";
+		string s = (line.Speaker ?? "").ToLowerInvariant();
+		string zh = line.ChineseText ?? "";
+		string km = (line.CorrectedKhmer ?? line.DraftKhmer ?? "").ToLowerInvariant();
+
+		string[] femaleKeywords = new string[] {
+			"female", "girl", "woman", "lady", "she", "her", "mother", "mom", "sister", 
+			"queen", "princess", "wife", "daughter", "actress", "sreymom", "srey_mom",
+			"ស្រី", "នាង", "អូន", "ម៉ាក់", "ម្ដាយ", "កញ្ញា", "អ្នកនាង", "យាយ", "ប្អូនស្រី", "បងស្រី", "នារី", "មេម៉ាយ"
+		};
+		if (femaleKeywords.Any(k => s.Contains(k) || km.Contains(k)))
+		{
+			return "sreymom";
+		}
+
+		string[] femaleZh = new string[] { "姑娘", "小姐", "夫人", "娘子", "娘", "妈", "姐", "妹", "婆", "妃", "后", "奴婢", "妾身", "她", "女", "公主", "丫鬟", "母" };
+		if (femaleZh.Any(k => s.Contains(k) || zh.Contains(k)))
+		{
+			return "sreymom";
+		}
+
+		string[] maleKeywords = new string[] {
+			"male", "boy", "man", "he", "him", "father", "dad", "brother", "king", "prince", "husband", "son", "actor", "piset", "piseth",
+			"ប្រុស", "លោក", "បង", "ពុក", "ឪពុក", "តា", "ប្អូនប្រុស", "បងប្រុស", "ព្រះអង្គ", "ទ័ព"
+		};
+		if (maleKeywords.Any(k => s.Contains(k) || km.Contains(k)))
+		{
+			return "piset";
+		}
+
+		string[] maleZh = new string[] { "先生", "兄弟", "哥", "弟", "爷", "皇", "帝", "臣", "朕", "末将", "老夫", "老衲", "爸爸", "爹", "男", "他", "少爷", "公", "父" };
+		if (maleZh.Any(k => s.Contains(k) || zh.Contains(k)))
+		{
+			return "piset";
+		}
+
+		return "piset";
+	}
+
+	public static string ResolveDialogueVoice(DialogueLine l)
+	{
+		if (l == null) return "piset";
+		if (!string.IsNullOrWhiteSpace(l.VoiceProfile))
+		{
+			string vp = l.VoiceProfile.Trim().ToLowerInvariant();
+			if (vp.Contains("sreymom") || vp.Contains("female") || vp.Contains("srey") || vp.Contains("ស្រី"))
+				return "sreymom";
+			if (vp.Contains("piset") || vp.Contains("piseth") || vp.Contains("male") || vp.Contains("ប្រុស"))
+				return "piset";
+			return vp;
+		}
+		string detected = DetectGenderVoice(l);
+		l.VoiceProfile = detected;
+		return detected;
+	}
+
+	public static int GetAudioFileDurationMs(string audioPath)
+	{
+		if (string.IsNullOrWhiteSpace(audioPath) || !File.Exists(audioPath)) return 0;
+		try
+		{
+			string ffprobe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", "ffprobe.exe");
+			if (!File.Exists(ffprobe)) ffprobe = "ffprobe";
+
+			ProcessStartInfo psi = new ProcessStartInfo
+			{
+				FileName = ffprobe,
+				Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{audioPath}\"",
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true
+			};
+			using (Process p = Process.Start(psi))
+			{
+				string stdout = p.StandardOutput.ReadToEnd();
+				p.WaitForExit(3000);
+				if (double.TryParse(stdout.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out double sec))
+				{
+					return (int)(sec * 1000.0);
+				}
+			}
+		}
+		catch { }
+		return 0;
+	}
+
+	public static bool AutoFitAudioDuration(string audioPath, int maxAllowedMs)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(audioPath) || !File.Exists(audioPath) || maxAllowedMs <= 300) return false;
+			int actualMs = GetAudioFileDurationMs(audioPath);
+			if (actualMs <= maxAllowedMs) return true;
+
+			string ffmpeg = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", "ffmpeg.exe");
+			if (!File.Exists(ffmpeg)) ffmpeg = "ffmpeg";
+
+			double tempo = (double)actualMs / (double)maxAllowedMs;
+			double clampedTempo = Math.Min(1.48, Math.Max(1.05, tempo));
+
+			string tempFitted = audioPath + ".fit.mp3";
+			ProcessStartInfo psi = new ProcessStartInfo
+			{
+				FileName = ffmpeg,
+				Arguments = $"-y -i \"{audioPath}\" -filter:a \"atempo={clampedTempo.ToString("0.###", CultureInfo.InvariantCulture)}\" -c:a libmp3lame -b:a 192k \"{tempFitted}\"",
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardError = true
+			};
+			using (Process p = Process.Start(psi))
+			{
+				p.StandardError.ReadToEnd();
+				p.WaitForExit(6000);
+				if (File.Exists(tempFitted) && new FileInfo(tempFitted).Length > 0)
+				{
+					int fittedMs = GetAudioFileDurationMs(tempFitted);
+					if (fittedMs > maxAllowedMs + 60)
+					{
+						double trimSec = maxAllowedMs / 1000.0;
+						double fadeStart = Math.Max(0.1, trimSec - 0.08);
+						string tempTrimmed = audioPath + ".trim.mp3";
+						ProcessStartInfo trimPsi = new ProcessStartInfo
+						{
+							FileName = ffmpeg,
+							Arguments = $"-y -i \"{tempFitted}\" -t {trimSec.ToString("0.###", CultureInfo.InvariantCulture)} -af \"afade=t=out:st={fadeStart.ToString("0.###", CultureInfo.InvariantCulture)}:d=0.08\" -c:a libmp3lame -b:a 192k \"{tempTrimmed}\"",
+							UseShellExecute = false,
+							CreateNoWindow = true,
+							RedirectStandardError = true
+						};
+						using (Process tp = Process.Start(trimPsi))
+						{
+							tp.StandardError.ReadToEnd();
+							tp.WaitForExit(6000);
+							if (File.Exists(tempTrimmed) && new FileInfo(tempTrimmed).Length > 0)
+							{
+								File.Copy(tempTrimmed, audioPath, true);
+								try { File.Delete(tempTrimmed); } catch { }
+								try { File.Delete(tempFitted); } catch { }
+								return true;
+							}
+						}
+					}
+					File.Copy(tempFitted, audioPath, true);
+					try { File.Delete(tempFitted); } catch { }
+					return true;
+				}
+			}
+		}
+		catch { }
+		return false;
+	}
+
+	public static async Task<int> AutoFixAllDialogueOverlapsAsync(MainViewModel vm)
+	{
+		if (vm?.DialogueLines == null || vm.DialogueLines.Count == 0) return 0;
+		return await Task.Run(() =>
+		{
+			int fixedCount = 0;
+			try
+			{
+				List<DialogueLine> lines = vm.DialogueLines.OrderBy(x => x.Index).ToList();
+				for (int i = 0; i < lines.Count; i++)
+				{
+					DialogueLine cur = lines[i];
+					if (string.IsNullOrEmpty(cur.AudioFilePath) || !File.Exists(cur.AudioFilePath)) continue;
+
+					DialogueLine next = lines.Skip(i + 1).FirstOrDefault(x => x.StartMs > cur.StartMs);
+					int maxDur = (next != null) ? (next.StartMs - cur.StartMs - 120) : (cur.EndMs - cur.StartMs + 800);
+					if (maxDur < 500) maxDur = 500;
+
+					int actualDur = GetAudioFileDurationMs(cur.AudioFilePath);
+					if (actualDur > maxDur)
+					{
+						bool ok = AutoFitAudioDuration(cur.AudioFilePath, maxDur);
+						if (ok) fixedCount++;
+					}
+				}
+				if (fixedCount > 0)
+				{
+					Log($"AutoFixAllDialogueOverlapsAsync: Successfully fitted {fixedCount} dialogue lines to prevent audio collision.");
+				}
+			}
+			catch (Exception ex)
+			{
+				Log("AutoFixAllDialogueOverlapsAsync error: " + ex.Message);
+			}
+			return fixedCount;
+		});
+	}
+
 	public static async Task<bool> SynthesizeSingleLineSafelyAsync(MainViewModel vm, DialogueLine l)
 	{
 		if (vm == null || vm.CurrentProject == null || l == null)
@@ -6662,7 +6933,8 @@ del ""%~f0""
 			{
 				text2 = ".";
 			}
-			string voice = ((!string.IsNullOrWhiteSpace(l.VoiceProfile)) ? l.VoiceProfile : "piset");
+			string voice = ResolveDialogueVoice(l);
+			l.VoiceProfile = voice;
 			// VoiceSpeed is a speech/TTS setting. Apply it to the generated voice;
 			// the preview video is always stream-copied at its original speed.
 			double speed = NormalizeVoiceSpeed(vm.VoiceSpeed);
@@ -6693,6 +6965,17 @@ del ""%~f0""
 			if (File.Exists(outPath) && new FileInfo(outPath).Length > 0)
 			{
 				EnsureAudioLoudnessBoost(outPath);
+
+				// Auto-fit audio duration to prevent speech collision with next line
+				try
+				{
+					DialogueLine nextLine = vm.DialogueLines?.FirstOrDefault(x => x.Index > l.Index && x.StartMs > l.StartMs);
+					int maxAllowedMs = (nextLine != null) ? (nextLine.StartMs - l.StartMs - 120) : (l.EndMs - l.StartMs + 800);
+					if (maxAllowedMs < 500) maxAllowedMs = 500;
+					AutoFitAudioDuration(outPath, maxAllowedMs);
+				}
+				catch { }
+
 				l.AudioFilePath = outPath;
 				l.LastSynthesizedText = l.CorrectedKhmer;
 				return true;

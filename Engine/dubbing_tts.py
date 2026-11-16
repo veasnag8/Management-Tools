@@ -52,19 +52,85 @@ async def _synthesize_async(
     await communicate.save(output_path)
     return os.path.exists(output_path) and os.path.getsize(output_path) > 0
 
+def get_audio_duration_ms(file_path: str) -> int:
+    """Retrieves audio duration in milliseconds using ffprobe."""
+    if not os.path.exists(file_path):
+        return 0
+    cmd = [
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", file_path
+    ]
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        dur_sec = float(res.stdout.strip())
+        return int(dur_sec * 1000)
+    except Exception:
+        # Estimation fallback based on mp3 size (~16KB/sec at 128kbps)
+        size = os.path.getsize(file_path)
+        return int((size / 16000) * 1000)
+
+def auto_fit_duration(file_path: str, max_duration_ms: int) -> bool:
+    """
+    Prevents dialogue audio overlap (កុំអោយនិយាយជាន់សំឡេងគ្នា).
+    If audio duration exceeds max_duration_ms, speeds up via FFmpeg atempo
+    so the spoken sentence finishes cleanly before the next sentence begins.
+    """
+    if not os.path.exists(file_path) or max_duration_ms <= 300:
+        return False
+    actual_ms = get_audio_duration_ms(file_path)
+    if actual_ms <= max_duration_ms:
+        return True
+
+    tempo = actual_ms / float(max_duration_ms)
+    clamped_tempo = min(1.48, max(1.05, tempo))
+    temp_fitted = file_path + ".fit.mp3"
+    try:
+        cmd = [
+            "ffmpeg", "-y", "-i", file_path,
+            "-filter:a", f"atempo={clamped_tempo:.3f}",
+            "-c:a", "libmp3lame", "-b:a", "192k",
+            temp_fitted
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+        if res.returncode == 0 and os.path.exists(temp_fitted) and os.path.getsize(temp_fitted) > 0:
+            fitted_ms = get_audio_duration_ms(temp_fitted)
+            if fitted_ms > max_duration_ms + 60:
+                trim_sec = max_duration_ms / 1000.0
+                temp_trimmed = file_path + ".trim.mp3"
+                trim_cmd = [
+                    "ffmpeg", "-y", "-i", temp_fitted,
+                    "-t", f"{trim_sec:.3f}",
+                    "-af", f"afade=t=out:st={max(0.1, trim_sec - 0.08):.3f}:d=0.08",
+                    "-c:a", "libmp3lame", "-b:a", "192k",
+                    temp_trimmed
+                ]
+                subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                if os.path.exists(temp_trimmed) and os.path.getsize(temp_trimmed) > 0:
+                    os.replace(temp_trimmed, file_path)
+                    try: os.remove(temp_fitted)
+                    except: pass
+                    return True
+            os.replace(temp_fitted, file_path)
+            return True
+    except Exception as e:
+        sys.stderr.write(f"auto_fit_duration error: {e}\n")
+    return False
+
 def synthesize_sentence(
     text: str,
     output_path: str,
     voice_id: str = "piset",
     speed: float = 1.0,
     volume: float = 1.0,
-    pitch_hz: int = 0
+    pitch_hz: int = 0,
+    max_duration_ms: int = 0
 ) -> Dict[str, Any]:
     """
-    Synthesizes a single Khmer sentence.
+    Synthesizes a single Khmer sentence with automatic volume boost and duration fitting.
     speed: 0.5 to 2.0 (1.0 is normal).
     volume: 0.0 to 2.0 (1.0 is normal).
     pitch_hz: -50 to +50 Hz.
+    max_duration_ms: if > 0, compresses audio tempo so it never overlaps following lines.
     """
     clean_text = (text or "").strip()
     if not clean_text:
@@ -106,6 +172,10 @@ def synthesize_sentence(
             except Exception:
                 pass
 
+        # Auto-fit duration if requested to prevent speech overlapping
+        if max_duration_ms > 0:
+            auto_fit_duration(output_path, max_duration_ms)
+
         # Get audio duration using ffprobe if available
         duration_ms = get_audio_duration_ms(output_path)
 
@@ -120,24 +190,6 @@ def synthesize_sentence(
             "success": False,
             "error": str(e)
         }
-
-def get_audio_duration_ms(file_path: str) -> int:
-    """Retrieves audio duration in milliseconds using ffprobe."""
-    if not os.path.exists(file_path):
-        return 0
-    import subprocess
-    cmd = [
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1", file_path
-    ]
-    try:
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
-        dur_sec = float(res.stdout.strip())
-        return int(dur_sec * 1000)
-    except Exception:
-        # Estimation fallback based on mp3 size (~16KB/sec at 128kbps)
-        size = os.path.getsize(file_path)
-        return int((size / 16000) * 1000)
 
 def synthesize_batch(
     dialogue_lines: List[Dict[str, Any]],
@@ -156,6 +208,16 @@ def synthesize_batch(
         volume = float(line.get("volume", 1.0))
         pitch = int(line.get("pitch", 0))
 
+        start_ms = int(line.get("start_ms", 0) or 0)
+        end_ms = int(line.get("end_ms", 0) or 0)
+        max_dur = 0
+        if idx + 1 < len(dialogue_lines):
+            next_start = int(dialogue_lines[idx+1].get("start_ms", 0) or 0)
+            if next_start > start_ms:
+                max_dur = max(500, next_start - start_ms - 100)
+        if max_dur == 0 and end_ms > start_ms:
+            max_dur = end_ms - start_ms + 800
+
         out_file = os.path.join(output_dir, f"{line_id}.mp3")
         res = synthesize_sentence(
             text=text,
@@ -163,11 +225,12 @@ def synthesize_batch(
             voice_id=voice,
             speed=speed,
             volume=volume,
-            pitch_hz=pitch
+            pitch_hz=pitch,
+            max_duration_ms=max_dur
         )
         res["id"] = line_id
-        res["start_ms"] = line.get("start_ms", 0)
-        res["end_ms"] = line.get("end_ms", 0)
+        res["start_ms"] = start_ms
+        res["end_ms"] = end_ms
         results.append(res)
 
     return results

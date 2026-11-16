@@ -63,6 +63,21 @@ Contextual Translation Guidelines:
 6. Provide Two Translations for Every Line:
    - "draft_khmer": Direct/literal translation baseline.
    - "corrected_khmer": The polished, natural, cinema-grade Khmer dialogue for dubbing.
+
+DUBBING BREVITY & TIMING RULES (កុំអោយនិយាយជាន់សំឡេងគ្នា):
+7. Spoken Khmer takes longer to articulate than Chinese. You MUST condense, summarize, and tighten the Khmer phrasing so it can be spoken comfortably within the dialogue time window ('dur' in ms) before the next line starts.
+8. Eliminate unnecessary wordy prefixes or filler (drop 'តើ...ឬទេ', 'កំពុងតែ', etc.). Use concise cinema dubbing idioms:
+   - "ទៅណា?" instead of "តើឯងចង់ទៅទីណាដែរ?"
+   - "មិនពិតទេ!" instead of "រឿងនេះមិនមែនជាការពិតនោះទេ"
+   - "ឈប់សិន!" instead of "សូមឈប់នៅទីនោះសិន"
+   - "កើតអី?" instead of "តើមានរឿងអ្វីកើតឡើងចំពោះឯង?"
+9. If 'dur' is short (< 1800ms), keep Khmer translation under 5-8 words.
+10. If 'dur' is between 1800ms and 3500ms, keep Khmer translation under 12-16 words.
+
+GENDER & VOICE RECOGNITION (ស្គាល់សំឡេងមនុស្សប្រុស និងស្រី ដោយស្វ័យប្រវត្តិ):
+11. Determine whether the speaker is male or female from character name, pronouns (他/她, 姑娘/公子, 朕/妾身), context, and tone.
+   - For female speakers: set "gender": "female", "voice": "sreymom".
+   - For male speakers: set "gender": "male", "voice": "piset".
 """
 
 def parse_api_keys(raw_input: Any) -> List[str]:
@@ -255,32 +270,28 @@ def _translate_chunk_with_pool(
     pool: GeminiKeyPool,
     movie_context: str,
     model_name: str
-) -> Dict[int, Dict[str, str]]:
+) -> Dict[int, Dict[str, Any]]:
     """Translates a chunk using the Multi-Key Pool with automatic failover."""
     prompt_data = [
         {
             "i": item.get("index", idx + 1),
             "s": item.get("speaker", ""),
             "zh": item.get("chinese", ""),
-            "km": item.get("draft_khmer", "")
+            "dur": max(500, int((item.get("end_ms") or 0) - (item.get("start_ms") or 0))) if item.get("end_ms") else 2500
         }
         for idx, item in enumerate(chunk)
     ]
     user_content = (
         f"Context:{movie_context}\n"
-        f"Polish meaning and natural spoken Khmer:{json.dumps(prompt_data, ensure_ascii=False, separators=(',', ':'))}\n"
-        "Return JSON only: [{\"index\":1,\"corrected_khmer\":\"...\"}]"
+        "Translate movie lines to natural spoken Khmer dubbing. Tighten dialogue to fit 'dur' ms without overlapping next lines. "
+        "Identify gender ('male'/'female') and assign voice ('piset'/'sreymom').\n"
+        f"Lines:{json.dumps(prompt_data, ensure_ascii=False, separators=(',', ':'))}\n"
+        "Return JSON only: [{\"index\":1,\"draft_khmer\":\"...\",\"corrected_khmer\":\"...\",\"gender\":\"male|female\",\"voice\":\"piset|sreymom\"}]"
     )
 
-    models_to_try = [
-        model_name,
-        "gemini-3.5-flash",
-        "gemini-3.8-flash",
-        "gemini-flash-latest",
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite",
-        "gemini-3.5-flash-lite",
-    ]
+    valid_models = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]
+    chosen_model = model_name if model_name in valid_models else "gemini-2.5-flash"
+    models_to_try = [chosen_model] + [m for m in valid_models if m != chosen_model]
 
     while pool.has_keys():
         client, types, key = pool.get_client()
@@ -291,16 +302,14 @@ def _translate_chunk_with_pool(
         chunk_quota_exhausted_on_key = False
 
         for m in models_to_try:
-            if not m or m in seen_models:
-                continue
-            if "2.0" in m or "2.5" in m:
+            if m in seen_models:
                 continue
             seen_models.add(m)
             try:
                 cfg = types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
                     response_mime_type="application/json",
-                    temperature=0.4
+                    temperature=0.3
                 )
                 response = client.models.generate_content(
                     model=m,
@@ -333,7 +342,7 @@ def translate_dialogue_batch(
     dialogue_items: List[Dict[str, Any]],
     api_key_or_keys: Any,
     movie_context: str = "Chinese Drama / Movie",
-    model_name: str = "gemini-3.5-flash",
+    model_name: str = "gemini-2.5-flash",
     return_usage: bool = False
 ) -> Any:
     """Translates dialogue lines from Chinese to natural Khmer with Multi-Key Pooling and intelligent fallback."""
@@ -342,13 +351,9 @@ def translate_dialogue_batch(
 
     pool = GeminiKeyPool(api_key_or_keys)
 
-    # Produce the inexpensive literal baseline before calling Gemini.
-    for item in dialogue_items:
-        if not (item.get("draft_khmer") or "").strip():
-            item["draft_khmer"] = free_translate_zh_to_km(item.get("chinese", ""))
-
-    CHUNK_SIZE = 30
-    gemini_map: Dict[int, Dict[str, str]] = {}
+    # Process in large, fast batches (50 lines per chunk) for near-instant execution
+    CHUNK_SIZE = 50
+    gemini_map: Dict[int, Dict[str, Any]] = {}
 
     if pool.has_keys():
         sys.stderr.write(f"[KeyPool] Translating {len(dialogue_items)} lines using {len(pool.keys)} Gemini API keys in pool...\n")
@@ -368,13 +373,20 @@ def translate_dialogue_batch(
         chinese = item.get("chinese", "").strip()
         t = gemini_map.get(item_idx, {})
 
-        draft = (item.get("draft_khmer", "") or "").strip()
+        draft = t.get("draft_khmer", "") or (item.get("draft_khmer", "") or "").strip()
         corrected = t.get("corrected_khmer", "").strip()
+        gender = t.get("gender", item.get("gender", "")).strip().lower()
+        voice = t.get("voice", item.get("voice", "")).strip().lower()
+        if not voice:
+            voice = "sreymom" if gender == "female" else "piset"
+
         notes = "Gemini natural-language review (Multi-Key Pool)"
 
         merged_item = dict(item)
         merged_item["index"] = item_idx
         merged_item["chinese"] = item.get("chinese", "")
+        merged_item["gender"] = gender
+        merged_item["voice"] = voice
         merged_item["notes"] = notes
 
         def is_valid_translation(txt: str) -> bool:
@@ -419,7 +431,7 @@ def regenerate_single_line(
     speaker: str = "Character",
     emotion: str = "Normal",
     scene_context: str = "",
-    model_name: str = "gemini-3.5-flash"
+    model_name: str = "gemini-2.5-flash"
 ) -> Dict[str, str]:
     """Regenerates translation for a single dialogue line."""
     items = [{

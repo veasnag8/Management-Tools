@@ -4,10 +4,10 @@
   "latest_version": "2.1.2",
   "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.2/ToolDubber-Setup-v2.1.2.exe",
   "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.2/ToolDubber-Patch-v2.1.2.zip",
-  "patch_sha256": "182ac030b2cfa403982dfe02e73ed82056254d2f017b06c825dcc9936726d30f",
-  "patch_size_bytes": 169814,
+  "patch_sha256": "f5781ca1798a2e1da884a1698765ef33157e47a9c8a9689e4568a8dec4b88489",
+  "patch_size_bytes": 173629,
   "min_patch_version": "2.0.0",
-  "release_notes": "កំណែថ្មី Version 2.1.2 រួមមាន:\n1. 🎙️ Fix Gemini Transcribe & Translate AI៖ កែសម្រួលបញ្ហា No Speech Detected ដោយជោគជ័យ 100% និងបន្ថែមម៉ូឌែល Gemini 3.5 Flash ជំនាន់ចុងក្រោយ បង្កើនល្បឿនបកប្រែរហ័សទ្វេដង\n2. 🔊 Fix Video Playback Audio៖ កែសម្រួលបញ្ហាគ្មានសំឡេងពេលចាក់វីដេអូដើម ឬចុច Update Preview ឱ្យឮសំឡេងច្បាស់ល្អពេញលេញ\n3. 📁 Episodes List Import from Folder៖ អាចនាំចូលវីដេអូច្រើនភាគពី Folder តែមួយ ឬជ្រើសរើស Files ជាច្រើន រួចចុច Translate Selected តែម្ដង\n4. 🔑 Multi-Key Pool & High Performance Audio Extraction៖ បង្វិល Gemini Key ឆ្លាស់គ្នាស្វ័យប្រវត្តិតាម Round-Robin មិនបារម្ភរឿងជាប់ Quota",
-  "sha256": "0a1ae2f06507cbc2ae3b986ba2fd746ebc9d382e9bdd518ee80291e8f86286de",
+  "release_notes": "កំណែថ្មី Version 2.1.2 រួមមាន:\n1. ⚡ Auto-Fix Audio Overlaps (ជួសជុលសំឡេងជាន់គ្នា)៖ Gemini បកប្រែខ្លីខ្លឹមសមល្មមតាមកាលវេលា និងប្រព័ន្ធ FFmpeg atempo កែសម្រួលល្បឿនដោយស្វ័យប្រវត្តិ ធានាថាសំឡេងនិយាយមិនជាន់គ្នាដាច់ខាត ព្រមទាំងមានប៊ូតុង ⚡ Fix Overlaps លើ Menu\n2. 🔊 Default Voice Speed 1.25x (58%)៖ កំណត់ល្បឿនសំឡេង Voice Speed លំនាំដើមត្រឹម 1.25x (=58% លើ Slider) ច្បាស់ ពីរោះ ស្តាប់ស្រួលបែបធម្មជាតិ\n3. 🚀 Fast Translation & Polishing៖ បង្កើនល្បឿនបកប្រែសាច់រឿងរហ័សទ្វេដង (ដកចេញ delay ចាស់ៗ បកប្រែម្តង 50 បន្ទាត់លឿនដូចផ្លេកបន្ទោរ)\n4. 🎙️ Fix No Speech Detected Error៖ បន្ថែម Dynamic Audio Normalization & Multi-Key Pool Failover ចាប់យកសំឡេងនិយាយក្នុងវីដេអូច្បាស់ល្អ មិនខ្លាចភ្លេងកំដរ\n5. 👥 Auto Gender Recognition (ប្រុស-ស្រី)៖ សម្គាល់សំឡេងមនុស្សប្រុស (Piseth) និងមនុស្សស្រី (Sreymom) ដោយស្វ័យប្រវត្តិតាមរយៈតួអង្គ និងសំនៀង",
+  "sha256": "91148c7f383d3e5d0794a149cdc6e49883ba196309b0c8aa054a796a45b3aceb",
   "mandatory": false
 }
