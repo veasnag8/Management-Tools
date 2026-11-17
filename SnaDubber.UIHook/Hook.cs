@@ -7207,8 +7207,8 @@ del ""%~f0""
 		}
 		else if (!string.IsNullOrEmpty(text) && File.Exists(text) && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
 		{
-			Log("BuildPreviewVideoAsync: Mixing with gentle BGM track and extra boosted Khmer voice: " + text);
-			arguments = $"-y -i \"{videoPath}\" -i \"{text}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=0.15[a_bgm];[2:a]volume=2.8,alimiter=limit=0.98[a_khmer];[a_bgm][a_khmer]amix=inputs=2:normalize=0:duration=first[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			Log("BuildPreviewVideoAsync: Mixing with dynamic audio ducking BGM track and boosted Khmer voice: " + text);
+			arguments = $"-y -i \"{videoPath}\" -i \"{text}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=0.85[a_bgm_raw];[2:a]volume=2.8,alimiter=limit=0.98[a_khmer];[a_bgm_raw][a_khmer]sidechaincompress=threshold=0.08:ratio=5:attack=15:release=350[ducked_bgm];[ducked_bgm][a_khmer]amix=inputs=2:normalize=0:duration=first[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
 		}
 		else
 		{

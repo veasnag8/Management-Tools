@@ -145,7 +145,23 @@ def synthesize_sentence(
     # User requested: Khmer speech to be much louder and punchier
     vol_str = "+100%"
 
-    pitch_str = f"{'+' if pitch_hz >= 0 else ''}{pitch_hz}Hz"
+    effective_pitch = pitch_hz
+    if effective_pitch == 0 and voice_id:
+        v_low = voice_id.lower()
+        if "spk_3" in v_low or "speaker 3" in v_low:
+            effective_pitch = -2
+        elif "spk_4" in v_low or "speaker 4" in v_low:
+            effective_pitch = 3
+        elif "spk_5" in v_low or "speaker 5" in v_low:
+            effective_pitch = 2
+        elif "spk_6" in v_low or "speaker 6" in v_low:
+            effective_pitch = -2
+        elif "spk_7" in v_low or "speaker 7" in v_low:
+            effective_pitch = -4
+        elif "spk_8" in v_low or "speaker 8" in v_low:
+            effective_pitch = 4
+
+    pitch_str = f"{'+' if effective_pitch >= 0 else ''}{effective_pitch}Hz"
 
     try:
         ok = asyncio.run(_synthesize_async(

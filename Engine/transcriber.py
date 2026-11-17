@@ -109,9 +109,10 @@ def _transcribe_single_audio_file(
         return []
 
     prompt = (
-        "You are an expert movie subtitle and speech transcription engine. "
+        "You are an expert movie subtitle and speech transcription engine with multi-speaker diarization. "
         "Listen to this audio track carefully and transcribe every spoken dialogue sentence with accurate timestamps. "
         "Transcribe all speech even if whispered, soft, colloquial, rapid, or accompanied by background music or sound effects. "
+        "Distinguish different voices in the conversation and assign consistent speaker labels: 'spk_1', 'spk_2', up to 'spk_8'. "
         "For each dialogue line, determine whether the speaker is male or female based on acoustic vocal tone: "
         "- Set 'gender': 'female' or 'male'. "
         "- Set 'voice': 'sreymom' for female voices, or 'piset' for male voices. "
@@ -120,7 +121,7 @@ def _transcribe_single_audio_file(
         "  {"
         "    \"start_ms\": 1500,"
         "    \"end_ms\": 4200,"
-        "    \"speaker\": \"Character 1\","
+        "    \"speaker\": \"spk_1\","
         "    \"gender\": \"male\","
         "    \"voice\": \"piset\","
         "    \"chinese\": \"Actual spoken dialogue sentence from the video\","

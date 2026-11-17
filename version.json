@@ -4,10 +4,10 @@
   "latest_version": "2.1.2",
   "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.2/ToolDubber-Setup-v2.1.2.exe",
   "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.2/ToolDubber-Patch-v2.1.2.zip",
-  "patch_sha256": "a08f57df63ccda765414e8946850b2c92a6bf5fc53097cf2c0a24ce19c0d3155",
-  "patch_size_bytes": 174909,
+  "patch_sha256": "46f104e335423f7d4fdc553e892139f905def4ac468c74178fb2158e0153db88",
+  "patch_size_bytes": 175213,
   "min_patch_version": "2.0.0",
-  "release_notes": "កំណែថ្មី Version 2.1.2 រួមមាន:\n1. ⚡ High-Speed Chunked Transcription & No Hang៖ ដោះស្រាយបញ្ហាគាំងនៅ 48% ដោយបែងចែកសម្លេងជា Chunk ដំណើរការស្របគ្នា (Parallel) ឆាប់រហ័សទោះបីវីដេអូវែង 30+ នាទីក៏ដោយ\n2. 🚀 Support All Gemini Keys (gemini-3.5-flash)៖ គាំទ្រទាំង Key ចាស់ និង Key ជំនាន់ថ្មីទាំងអស់ មិនមានបញ្ហា 404 Model Not Found\n3. ⚡ Auto-Fix Audio Overlaps (ជួសជុលសំឡេងជាន់គ្នា)៖ Gemini បកប្រែខ្លីខ្លឹមសមល្មមតាមកាលវេលា និងប្រព័ន្ធ FFmpeg atempo កែសម្រួលល្បឿនដោយស្វ័យប្រវត្តិ ធានាថាសំឡេងនិយាយមិនជាន់គ្នាដាច់ខាត\n4. 🔊 Default Voice Speed 1.25x (58%)៖ កំណត់ល្បឿនសំឡេង Voice Speed លំនាំដើមត្រឹម 1.25x (=58% លើ Slider) ច្បាស់ ពីរោះ ស្តាប់ស្រួលបែបធម្មជាតិ\n5. 👥 Auto Gender Recognition (ប្រុស-ស្រី)៖ សម្គាល់សំឡេងមនុស្សប្រុស (Piseth) និងមនុស្សស្រី (Sreymom) ដោយស្វ័យប្រវត្តិតាមរយៈតួអង្គ និងសំនៀង",
-  "sha256": "fbad35cfe91f1693d48c3168af46eb3176d25256fc43362b120b2431d1c3e3ff",
+  "release_notes": "កំណែថ្មី Version 2.1.2 រួមមាន:\n1. ⚡ High-Speed Chunked Transcription & No Hang៖ ដោះស្រាយបញ្ហាគាំងនៅ 48% ដោយបែងចែកសម្លេងជា Chunk ដំណើរការស្របគ្នា (Parallel) ឆាប់រហ័សទោះបីវីដេអូវែង 30m, 1h, 2h ក៏ដោយ\n2. 🚀 Support All Gemini Keys (gemini-3.5-flash)៖ គាំទ្រទាំង Key ចាស់ និង Key ជំនាន់ថ្មីទាំងអស់ មិនមានបញ្ហា 404 Model Not Found\n3. ⚡ Auto-Fix Audio Overlaps (ជួសជុលសំឡេងជាន់គ្នា)៖ Gemini បកប្រែខ្លីខ្លឹមសមល្មមតាមកាលវេលា និងប្រព័ន្ធ FFmpeg atempo កែសម្រួលល្បឿនដោយស្វ័យប្រវត្តិ ធានាថាសំឡេងនិយាយមិនជាន់គ្នាដាច់ខាត\n4. 🔊 Default Voice Speed 1.25x (58%)៖ កំណត់ល្បឿនសំឡេង Voice Speed លំនាំដើមត្រឹម 1.25x (=58% លើ Slider) ច្បាស់ ពីរោះ ស្តាប់ស្រួលបែបធម្មជាតិ\n5. 👥 Multi-Speaker Diarization (spk_1 ដល់ spk_8) & Auto Gender៖ បែងចែកតួអង្គនិយាយច្រើនគ្នា និងសម្គាល់សំឡេងមនុស្សប្រុស (Piseth) និងមនុស្សស្រី (Sreymom) ដោយស្វ័យប្រវត្តិតាមរយៈតួអង្គ និងសំនៀង\n6. 🎚️ Dynamic Audio Ducking (BGM)៖ រក្សាភ្លេង BGM ដើមឱ្យឮច្បាស់ពេញលេញ ហើយបន្ថយសំឡេងភ្លេងដោយស្វ័យប្រវត្តិនៅពេលតួអង្គនិយាយខ្មែរ (Professional Audio Ducking)",
+  "sha256": "b7f6b69c310b92b25d13d9abe8baa38d140a1774ad85dea7953568bc56f6e7dd",
   "mandatory": false
 }
