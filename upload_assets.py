@@ -12,13 +12,45 @@ def get_git_token():
             return line.split('=', 1)[1]
     raise RuntimeError("GitHub token not found in git credential manager")
 
+def get_or_create_release(tag, name, base_headers):
+    # Check if release exists
+    req = urllib.request.Request('https://api.github.com/repos/veasnag8/Management-Tools/releases', headers=base_headers)
+    with urllib.request.urlopen(req) as resp:
+        releases = json.loads(resp.read().decode('utf-8'))
+        for r in releases:
+            if r.get('tag_name') == tag:
+                print(f"Found existing release for {tag} (ID: {r['id']})")
+                return r['id']
+
+    # Create new release
+    print(f"Creating new GitHub release for {tag} ({name})...")
+    create_url = 'https://api.github.com/repos/veasnag8/Management-Tools/releases'
+    payload = json.dumps({
+        'tag_name': tag,
+        'target_commitish': 'main',
+        'name': name,
+        'body': f'Tool Dubber Release {tag}',
+        'draft': False,
+        'prerelease': False
+    }).encode('utf-8')
+    create_headers = dict(base_headers)
+    create_headers['Content-Type'] = 'application/json'
+    create_req = urllib.request.Request(create_url, data=payload, headers=create_headers, method='POST')
+    with urllib.request.urlopen(create_req) as resp:
+        res = json.loads(resp.read().decode('utf-8'))
+        print(f"Created release ID: {res['id']}")
+        return res['id']
+
 def main():
     token = get_git_token()
-    release_id = 444342267
+    tag = "v2.1.3"
+    name = "Tool Dubber v2.1.3"
     base_headers = {
         'Authorization': f'token {token}',
         'User-Agent': 'ToolDubber-Release'
     }
+
+    release_id = get_or_create_release(tag, name, base_headers)
 
     print(f"Checking existing assets for release {release_id}...")
     req = urllib.request.Request(f'https://api.github.com/repos/veasnag8/Management-Tools/releases/{release_id}', headers=base_headers)
@@ -35,13 +67,13 @@ def main():
             print("Deleted.")
 
     # 1. Upload Patch ZIP
-    patch_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Patch-v2.1.2.zip'
+    patch_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Patch-v2.1.3.zip'
     patch_size = os.path.getsize(patch_path)
     print(f"\nUploading Patch: {patch_path} ({patch_size} bytes)...")
     with open(patch_path, 'rb') as f:
         patch_data = f.read()
 
-    patch_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Patch-v2.1.2.zip"
+    patch_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Patch-v2.1.3.zip"
     patch_headers = dict(base_headers)
     patch_headers['Content-Type'] = 'application/zip'
     patch_headers['Content-Length'] = str(patch_size)
@@ -52,13 +84,13 @@ def main():
         print(f"✓ Patch uploaded successfully: {res.get('browser_download_url')} (size: {res.get('size')})")
 
     # 2. Upload Setup EXE
-    setup_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Setup-v2.1.2.exe'
+    setup_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Setup-v2.1.3.exe'
     setup_size = os.path.getsize(setup_path)
     print(f"\nUploading Setup EXE: {setup_path} ({setup_size} bytes)... This may take 1-2 minutes.")
     with open(setup_path, 'rb') as f:
         setup_data = f.read()
 
-    setup_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Setup-v2.1.2.exe"
+    setup_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Setup-v2.1.3.exe"
     setup_headers = dict(base_headers)
     setup_headers['Content-Type'] = 'application/octet-stream'
     setup_headers['Content-Length'] = str(setup_size)
@@ -68,7 +100,7 @@ def main():
         res = json.loads(resp.read().decode('utf-8'))
         print(f"✓ Setup uploaded successfully: {res.get('browser_download_url')} (size: {res.get('size')})")
 
-    print("\nAll assets for v2.1.2 successfully uploaded and verified on GitHub!")
+    print(f"\nAll assets for {tag} successfully uploaded and verified on GitHub!")
 
 if __name__ == '__main__':
     main()

@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.1.2";
+			window.Title = "SNA-Dubber Version 2.1.3";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -366,9 +366,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.2", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.3", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 2.1.2";
+				window.Title = "SNA-Dubber Version 2.1.3";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -616,7 +616,7 @@ public static class Hook
 			{
 				client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", deviceToken);
 			}
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.2");
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.3");
 
 			var payload = new
 			{
@@ -3076,7 +3076,7 @@ public static class Hook
 			var asmVer = typeof(Hook).Assembly.GetName().Version;
 			string currentVer = asmVer != null 
 				? (asmVer.Build >= 0 ? $"{asmVer.Major}.{asmVer.Minor}.{asmVer.Build}" : $"{asmVer.Major}.{asmVer.Minor}.0")
-				: "2.1.2";
+				: "2.1.3";
 			if (!string.IsNullOrEmpty(postUpdateVersion))
 			{
 				currentVer = postUpdateVersion;
@@ -3538,7 +3538,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.2");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.3");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3566,7 +3566,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.2");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.3");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)

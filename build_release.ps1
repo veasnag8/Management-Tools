@@ -1,7 +1,7 @@
 $src = "D:\Project\Release_v1.2.0\SNA-Dubber"
 $outputDir = "D:\Project\Release_v1.2.0\Output"
-$patchZip = Join-Path $outputDir "ToolDubber-Patch-v2.1.2.zip"
-$stage = Join-Path $env:TEMP "patch_stage_v212"
+$patchZip = Join-Path $outputDir "ToolDubber-Patch-v2.1.3.zip"
+$stage = Join-Path $env:TEMP "patch_stage_v213"
 
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Path (Join-Path $stage "Engine") -Force | Out-Null
@@ -22,7 +22,7 @@ $iss = "D:\Project\Release_v1.2.0\Management-Tools\installer\setup.iss"
 
 & $iscc $iss
 if ($LASTEXITCODE -eq 0) {
-    $out = Join-Path $outputDir "ToolDubber-Setup-v2.1.2.exe"
+    $out = Join-Path $outputDir "ToolDubber-Setup-v2.1.3.exe"
     $h = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
     $sz = (Get-Item $out).Length
     Write-Host "EXE_SHA256=$h"
