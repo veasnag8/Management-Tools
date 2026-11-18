@@ -6128,23 +6128,31 @@ del ""%~f0""
 						return;
 					}
 
-					// Raw original video: Mute only if original sound is disabled or Khmer audio is active
-					bool hasKhmerDub = vm.DialogueLines != null && vm.DialogueLines.Any(l => !string.IsNullOrEmpty(l.AudioFilePath) && File.Exists(l.AudioFilePath));
-					bool shouldMuteOriginalVideo = (vm.AudioMix != null && vm.AudioMix.IsOriginalMuted) || hasKhmerDub;
-
-					if (shouldMuteOriginalVideo)
+					// Auto-upgrade to pre-rendered preview video if available in PreviewCache
+					if (vm.CurrentProject != null && !string.IsNullOrEmpty(vm.CurrentProject.Id))
 					{
-						if (!player.IsMuted || player.Volume > 0.0)
+						string cachedPreview = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "PreviewCache", vm.CurrentProject.Id, "preview_khmer.mp4");
+						if (File.Exists(cachedPreview))
 						{
-							player.IsMuted = true;
-							player.Volume = 0.0;
+							try
+							{
+								TimeSpan curPos = player.Position;
+								bool wasPlaying = vm.IsPlaying;
+								player.Source = new Uri(cachedPreview);
+								player.Position = curPos;
+								player.IsMuted = false;
+								player.Volume = 1.0;
+								_previewLiveKhmerPlayer.Stop();
+								_previewLiveBgmPlayer.Stop();
+								_previewLivePlayingLineIndex = -1;
+								if (wasPlaying) player.Play();
+								return;
+							}
+							catch { }
 						}
 					}
-					else
-					{
-						if (player.IsMuted) player.IsMuted = false;
-						if (player.Volume < 0.99) player.Volume = 1.0;
-					}
+
+					if (player.IsMuted) player.IsMuted = false;
 
 					if (!vm.IsPlaying)
 					{
@@ -6192,6 +6200,13 @@ del ""%~f0""
 						{
 							_previewLiveKhmerPlayer.Play();
 						}
+
+						// Audio ducking: lower original video sound to 20% so character's Khmer voice is crisp and clear
+						if (player.Volume > 0.25 || player.IsMuted)
+						{
+							player.IsMuted = false;
+							player.Volume = 0.20;
+						}
 					}
 					else
 					{
@@ -6199,6 +6214,13 @@ del ""%~f0""
 						{
 							_previewLivePlayingLineIndex = -1;
 							try { _previewLiveKhmerPlayer.Stop(); } catch { }
+						}
+
+						// Restore full movie volume for background sound and effects
+						if (player.Volume < 0.95 || player.IsMuted)
+						{
+							player.IsMuted = false;
+							player.Volume = 1.0;
 						}
 					}
 
@@ -7200,20 +7222,16 @@ del ""%~f0""
 			}
 		}
 		string arguments;
-		if (vm.AudioMix != null && vm.AudioMix.IsOriginalMuted)
-		{
-			Log("BuildPreviewVideoAsync: Audio Mute is ACTIVE -> Muting original sound & voice completely. Khmer dub only (boosted).");
-			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=2.8,alimiter=limit=0.98[a_out]\" -map 0:v -map \"[a_out]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
-		}
-		else if (!string.IsNullOrEmpty(text) && File.Exists(text) && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
+		if (!string.IsNullOrEmpty(text) && File.Exists(text) && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
 		{
 			Log("BuildPreviewVideoAsync: Mixing with dynamic audio ducking BGM track and boosted Khmer voice: " + text);
 			arguments = $"-y -i \"{videoPath}\" -i \"{text}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=0.85[a_bgm_raw];[2:a]volume=2.8,alimiter=limit=0.98[a_khmer];[a_bgm_raw][a_khmer]sidechaincompress=threshold=0.08:ratio=5:attack=15:release=350[ducked_bgm];[ducked_bgm][a_khmer]amix=inputs=2:normalize=0:duration=first[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
 		}
 		else
 		{
-			Log("BuildPreviewVideoAsync: No BGM track found or BGM muted, muxing boosted dubbed dialogue directly");
-			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=2.8,alimiter=limit=0.98[a_out]\" -map 0:v -map \"[a_out]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			// Always preserve movie background sound, music, and atmosphere ducked to 22%, combined with loud Khmer dub voice at 2.8x
+			Log("BuildPreviewVideoAsync: Mixing original video background audio (ducked) with loud Khmer dub dialogue");
+			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -filter_complex \"[0:a]volume=0.22,highpass=f=100,lowpass=f=5000[a_orig_bgm];[1:a]volume=2.8,alimiter=limit=0.98[a_khmer];[a_orig_bgm][a_khmer]amix=inputs=2:normalize=0:duration=first[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
 		}
 		ProcessStartInfo startInfo2 = new ProcessStartInfo
 		{

@@ -101,7 +101,7 @@ def extract_fast_audio(video_path: str, output_mp3: str) -> bool:
 def _transcribe_single_audio_file(
     audio_path: str,
     pool: GeminiKeyPool,
-    model_name: str = "gemini-3.5-flash",
+    model_name: str = "gemini-3.5-flash-lite",
     offset_ms: int = 0
 ) -> List[Dict[str, Any]]:
     """Transcribes a single audio chunk (<= 120s) with Gemini Key rotation."""
@@ -110,7 +110,7 @@ def _transcribe_single_audio_file(
 
     prompt = (
         "You are an expert movie subtitle and speech transcription engine with multi-speaker diarization. "
-        "Listen to this audio track carefully and transcribe every spoken dialogue sentence with accurate timestamps. "
+        "Listen to this audio track carefully and transcribe every spoken dialogue sentence with accurate timestamps in milliseconds (ms). "
         "Transcribe all speech even if whispered, soft, colloquial, rapid, or accompanied by background music or sound effects. "
         "Distinguish different voices in the conversation and assign consistent speaker labels: 'spk_1', 'spk_2', up to 'spk_8'. "
         "For each dialogue line, determine whether the speaker is male or female based on acoustic vocal tone: "
@@ -129,14 +129,21 @@ def _transcribe_single_audio_file(
         "  }"
         "]"
         "Rules:"
-        "1. start_ms and end_ms must be relative to this audio file (0 ms is start of file)."
+        "1. start_ms and end_ms must be in milliseconds relative to this audio file (e.g. 1500 for 1.5 seconds, not 1.5)."
         "2. Accurately transcribe actual spoken speech. Do not invent lines."
         "3. If there is no speech or silence, output an empty JSON array []."
         "4. Output ONLY valid JSON array."
     )
 
-    valid_models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-latest"]
-    chosen_model = model_name if model_name in valid_models else "gemini-3.5-flash"
+    valid_models = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash",
+        "gemini-flash-latest",
+        "gemini-2.5-flash-lite"
+    ]
+    chosen_model = model_name if model_name in valid_models else "gemini-3.5-flash-lite"
     candidate_models = [chosen_model] + [m for m in valid_models if m != chosen_model]
 
     # Try each key at most once to prevent infinite loops
@@ -177,8 +184,18 @@ def _transcribe_single_audio_file(
                         for item in data:
                             if not isinstance(item, dict):
                                 continue
-                            rel_start = int(item.get("start_ms", 0))
-                            rel_end = int(item.get("end_ms", rel_start + 2200))
+                            try:
+                                rel_start = int(float(item.get("start_ms", 0)))
+                                rel_end = int(float(item.get("end_ms", rel_start + 2200)))
+                            except Exception:
+                                rel_start = 0
+                                rel_end = 2200
+
+                            # Fix: if model returns seconds instead of milliseconds (e.g. 1.5s -> 1 or 2, 107s -> 107)
+                            if 0 < rel_end < 500:
+                                rel_start = int(rel_start * 1000)
+                                rel_end = int(rel_end * 1000)
+
                             if rel_end <= rel_start:
                                 rel_end = rel_start + 2000
 
@@ -230,7 +247,7 @@ def _transcribe_single_audio_file(
 def transcribe_video(
     video_path: str,
     api_key_or_keys: Any = "",
-    model_name: str = "gemini-3.5-flash"
+    model_name: str = "gemini-3.5-flash-lite"
 ) -> List[Dict[str, Any]]:
     """
     High-Performance Speech Transcription.

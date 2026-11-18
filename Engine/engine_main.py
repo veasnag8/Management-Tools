@@ -110,7 +110,7 @@ def main():
         elif action == "transcribe":
             video_path = payload_data.get("video_path", "")
             api_key = payload_data.get("api_keys") or payload_data.get("api_key", "")
-            model_name = payload_data.get("model_name", "gemini-3.5-flash")
+            model_name = payload_data.get("model_name", "gemini-3.5-flash-lite")
             segments = transcribe_video(video_path, api_key, model_name)
             response = {"success": True, "action": "transcribe", "segments": segments}
 
@@ -118,7 +118,7 @@ def main():
             dialogue = payload_data.get("dialogue", [])
             api_key = payload_data.get("api_keys") or payload_data.get("api_key", "")
             context = payload_data.get("context", "")
-            model_name = payload_data.get("model_name", "gemini-3.5-flash")
+            model_name = payload_data.get("model_name", "gemini-3.5-flash-lite")
             translated, usage = translate_dialogue_batch(dialogue, api_key, context, model_name, return_usage=True)
             response = {"success": True, "action": "translate", "dialogue": translated, "usage": usage}
 
@@ -128,7 +128,7 @@ def main():
             speaker = payload_data.get("speaker", "Character")
             emotion = payload_data.get("emotion", "Normal")
             scene_context = payload_data.get("scene_context", "")
-            model = payload_data.get("model_name", "gemini-2.5-flash")
+            model = payload_data.get("model_name", "gemini-3.5-flash-lite")
             res = regenerate_single_line(chinese, api_key, speaker, emotion, scene_context, model)
             response = {"success": True, "action": "regenerate_line", "result": res}
 
