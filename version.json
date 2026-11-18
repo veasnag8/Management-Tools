@@ -1,13 +1,13 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.1.4",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.4/ToolDubber-Setup-v2.1.4.exe",
-  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.4/ToolDubber-Patch-v2.1.4.zip",
-  "patch_sha256": "1f044020a017ac2c0174c0d17d2c9191abf8cd72a3d0f896e88737a3cbe43295",
-  "patch_size_bytes": 1791353,
+  "latest_version": "2.1.5",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.5/ToolDubber-Setup-v2.1.5.exe",
+  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.5/ToolDubber-Patch-v2.1.5.zip",
+  "patch_sha256": "944344a5dcae5249c197dfce356375b8781eb3f9be5219c839f9e071e89507a1",
+  "patch_size_bytes": 1791122,
   "min_patch_version": "2.0.0",
-  "release_notes": "កំណែថ្មី Version 2.1.4 រួមមាន:\n1. 🔊 Fix Preview Playback (កែសម្រួលសំឡេង Preview ពេលចុច Play): ធានាថានិយាយសំឡេងខ្មែរ 100% មិនលេចសំឡេងដើមឡើយ\n2. ⚖️ Fix Sound Volume Consistency (កែសម្រួលតុល្យភាពកម្រិតសំឡេងដើម និងចុងវីដេអូ): លុបបំបាត់បញ្ហាដើមវីដេអូលឺតិចតែចុងវីដេអូលឺខ្លាំង ដោយប្រើ normalize=0 និង dropout_transition=0 ទាំងក្នុង Preview និងពេល Export វីដេអូ ធ្វើឱ្យកម្រិតសំឡេងបកប្រែខ្មែរលឺច្បាស់ស្មើគ្នា 100% ចាប់ពីនាទីដំបូងរហូតដល់ចប់\n3. ⚡ Fast Preview Generation: បង្កើតវីដេអូ Preview យ៉ាងរហ័សត្រឹម 2-3 វិនាទី និងចាក់វីដេអូ Preview ដោយស្វ័យប្រវត្តិកម្រិតខ្ពស់\n4. 👥 Multi-Speaker & Auto Gender: ស្គាល់តួអង្គប្រុសស្រី auto និងបំបែកសំឡេងច្បាស់",
-  "sha256": "dbdab0c5ffee63b775e4f7cc2f5e66a29c1777f18c9a2fb7fcbdbfcbba21cc5e",
+  "release_notes": "កំណែថ្មី Version 2.1.5 រួមមាន:\n1. 🎬 Natural Spoken Khmer & Storyline Continuity (បកប្រែបែបភាសានិយាយកុនរលូន ស៊ីសង្វាក់គ្នាតាមសាច់រឿង និងហេតុការណ៍): លុបបំបាត់បញ្ហាបកប្រែដាច់កង់ៗ ឬដាច់សាច់រឿង ដោយកំណត់ឱ្យ AI បកប្រែមានន័យពេញលេញ រស់រវើក ដូចអ្នកបញ្ចូលសំឡេងភាពយន្តអាជីព\n2. 🎙️ Complete Natural Voice Pace (សំឡេងនិយាយចប់ប្រយោគពេញលេញ 100% មិនកាត់ចុងប្រយោគ): លុបបំបាត់ការកាត់តម្រឹមសំឡេង (Hard Trim) ធ្វើឱ្យសំឡេងខ្មែរនិយាយចប់គ្រប់ព្យាង្គ មិនរហ័សកន្ត្រាក់ ឬកាត់ដាច់ពាក្យពាក់កណ្តាលឡើយ\n3. 🎵 Ambient Movie Sound & Foley (មិនស្ងាត់ជ្រៀបពេលគ្មានភ្លេង BGM): រក្សាសំឡេងបរិយាកាស និង Effect របស់វីដេអូដើមដោយស្វ័យប្រវត្តិតាមរយៈ Sidechain Compression Ducking ធ្វើឱ្យពេលតួអង្គនិយាយ សំឡេងខ្មែរលឺច្បាស់ 100% ហើយពេលស្ងាត់ សំឡេងភ្លេងដើមលឺពិរោះរណ្តំ មិនស្ងាត់ជ្រៀបឡើយ\n4. 👥 Smart Gender Voice Recognition: ស្គាល់តួអង្គប្រុស (Piset) និងស្រី (Sreymom) ដោយស្វ័យប្រវត្តិ",
+  "sha256": "de37bb023c07d87fe5135c9bb5ea9df5e67146c9254bde2aad1aa80e46e70391",
   "mandatory": false
 }

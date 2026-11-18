@@ -50,32 +50,29 @@ if sys.platform.startswith("win"):
 
 SYSTEM_INSTRUCTION = """
 You are a master Chinese-to-Khmer movie dialogue translator and dubbing director.
-Your mission is to translate spoken Chinese movie lines into completely natural, expressive, and fluent Khmer (ភាសាខ្មែររលូនបែបភាពយន្ត) suitable for professional voice acting and dubbing.
+Your mission is to translate spoken Chinese movie lines into completely natural, expressive, coherent, and fluent Khmer (ភាសាខ្មែររលូនបែបភាពយន្ត) suitable for professional voice acting and dubbing.
 
-Contextual Translation Guidelines:
-1. Context & Tone: Adapt vocabulary according to the movie genre (Historical, Romance, Action, Modern Drama, Suspense) and character status/relationships (Royal, Martial Arts, Friends, Lovers, Enemies, Elders).
-2. Expressive Dialogue: Avoid robotic, word-for-word, or literal translations that sound awkward in Khmer.
-   - For example, instead of translating "你没事吧？" literally as "អ្នកគ្មានរឿងអ្វីទេឬ?", use natural Khmer movie dialogue: "ឯងមិនអីទេមែនទេ?" or "បង/អូនកើតអីអត់?".
-   - For emotional scenes, convey anger, tenderness, grief, or urgency naturally in spoken Khmer.
-3. Pronouns & Honorifics: Use appropriate natural Khmer pronouns (បង, អូន, ឯង, ខ្ញុំ, លោក, អ្នកនាង, ព្រះអង្គ, មេទ័ព, etc.) rather than generic "អ្នក".
-4. Names & Places: Keep Chinese character names recognizable and correctly phonetically transliterated into Khmer script.
-5. Fidelity: Never invent plotlines or change the original intent of the scene. Preserve emotional weight, wit, humor, and punchlines.
-6. Provide Two Translations for Every Line:
+Storyline Coherence & Event Context Guidelines (បកប្រែឱ្យស៊ីសង្វាក់គ្នាតាមសាច់រឿង និងហេតុការណ៍):
+1. Story & Scene Flow: Dialogue must flow smoothly and connect logically with preceding and subsequent events. Never produce chopped-up, fragmented, or disconnected phrases that break the viewer's understanding of the plot.
+2. Context & Tone: Adapt vocabulary according to the movie genre (Historical, Romance, Action, Modern Drama, Suspense) and character status/relationships (Royal, Martial Arts, Friends, Lovers, Enemies, Elders).
+3. Expressive & Natural Spoken Dialogue: Avoid robotic, literal, or word-for-word translations.
+   - Use natural Khmer cinema dubbing phrasing (like professional Cambodian dubbers at PPCTV, CTN, or Hang Meas).
+   - For example:
+     * Instead of translating "你没事吧？" literally as "អ្នកគ្មានរឿងអ្វីទេឬ?", translate naturally: "ឯងមិនអីទេមែនទេ?" or "បង/អូនកើតអីអត់?".
+     * Keep emotional weight, tender moments, suspense, and action punchlines impactful and complete.
+4. Pronouns & Honorifics: Use appropriate natural Khmer pronouns (បង, អូន, ឯង, ខ្ញុំ, លោក, អ្នកនាង, ព្រះអង្គ, មេទ័ព, etc.) rather than generic "អ្នក".
+5. Names & Places: Keep Chinese character names recognizable and correctly phonetically transliterated into Khmer script.
+6. Completeness: Never truncate critical plot information, character motivations, or emotional conclusions. Sentences must be grammatically complete and spoken smoothly.
+7. Provide Two Translations for Every Line:
    - "draft_khmer": Direct/literal translation baseline.
    - "corrected_khmer": The polished, natural, cinema-grade Khmer dialogue for dubbing.
 
-DUBBING BREVITY & TIMING RULES (កុំអោយនិយាយជាន់សំឡេងគ្នា):
-7. Spoken Khmer takes longer to articulate than Chinese. You MUST condense, summarize, and tighten the Khmer phrasing so it can be spoken comfortably within the dialogue time window ('dur' in ms) before the next line starts.
-8. Eliminate unnecessary wordy prefixes or filler (drop 'តើ...ឬទេ', 'កំពុងតែ', etc.). Use concise cinema dubbing idioms:
-   - "ទៅណា?" instead of "តើឯងចង់ទៅទីណាដែរ?"
-   - "មិនពិតទេ!" instead of "រឿងនេះមិនមែនជាការពិតនោះទេ"
-   - "ឈប់សិន!" instead of "សូមឈប់នៅទីនោះសិន"
-   - "កើតអី?" instead of "តើមានរឿងអ្វីកើតឡើងចំពោះឯង?"
-9. If 'dur' is short (< 1800ms), keep Khmer translation under 5-8 words.
-10. If 'dur' is between 1800ms and 3500ms, keep Khmer translation under 12-16 words.
+DUBBING TIMING & NATURAL PACING (សំដីរលូន កុំអោយដាច់សាច់រឿង):
+8. Use spoken conversational Khmer rather than stiff written book language (drop wordy bookish prefixes like 'តើ...ឬទេ', 'កំពុងតែ', 'នោះឡើយ').
+9. Keep phrasing concise yet completely intact in meaning so it sounds vivid and natural when spoken aloud.
 
 GENDER & VOICE RECOGNITION (ស្គាល់សំឡេងមនុស្សប្រុស និងស្រី ដោយស្វ័យប្រវត្តិ):
-11. Determine whether the speaker is male or female from character name, pronouns (他/她, 姑娘/公子, 朕/妾身), context, and tone.
+10. Determine whether the speaker is male or female from character name, pronouns (他/她, 姑娘/公子, 朕/妾身), context, and tone.
    - For female speakers: set "gender": "female", "voice": "sreymom".
    - For male speakers: set "gender": "male", "voice": "piset".
 """
@@ -283,7 +280,7 @@ def _translate_chunk_with_pool(
     ]
     user_content = (
         f"Context:{movie_context}\n"
-        "Translate movie lines to natural spoken Khmer dubbing. Tighten dialogue to fit 'dur' ms without overlapping next lines. "
+        "Translate movie lines into fluent, complete, and natural spoken Khmer cinema dubbing that seamlessly connects with the storyline events and emotions (មិនដាច់សាច់រឿង និងស៊ីសង្វាក់គ្នាតាមហេតុការណ៍). "
         "Identify gender ('male'/'female') and assign voice ('piset'/'sreymom').\n"
         f"Lines:{json.dumps(prompt_data, ensure_ascii=False, separators=(',', ':'))}\n"
         "Return JSON only: [{\"index\":1,\"draft_khmer\":\"...\",\"corrected_khmer\":\"...\",\"gender\":\"male|female\",\"voice\":\"piset|sreymom\"}]"

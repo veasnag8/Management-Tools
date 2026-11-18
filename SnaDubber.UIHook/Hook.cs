@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.1.4";
+			window.Title = "SNA-Dubber Version 2.1.5";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -366,9 +366,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.4", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.5", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 2.1.4";
+				window.Title = "SNA-Dubber Version 2.1.5";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -616,7 +616,7 @@ public static class Hook
 			{
 				client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", deviceToken);
 			}
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.4");
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.5");
 
 			var payload = new
 			{
@@ -2034,27 +2034,26 @@ public static class Hook
 
 			if (vm.AudioMix != null)
 			{
-				// MUTE THE ORIGINAL CHINESE TALKING COMPLETELY
-				vm.AudioMix.IsOriginalMuted = true;
-				vm.AudioMix.OriginalAudioVolume = 0.0;
+				bool hasRealBgm = !string.IsNullOrEmpty(vm.AudioMix.BgmTrackPath) && File.Exists(vm.AudioMix.BgmTrackPath) && !vm.AudioMix.IsBgmMuted;
+				if (hasRealBgm)
+				{
+					vm.AudioMix.IsBgmMuted = false;
+					vm.AudioMix.BgmVolume = 0.32;
+					vm.AudioMix.IsOriginalMuted = true;
+					vm.AudioMix.OriginalAudioVolume = 0.0;
+				}
+				else
+				{
+					// Retain original audio as soft atmospheric background so movie is NEVER dead silent!
+					vm.AudioMix.IsOriginalMuted = false;
+					vm.AudioMix.OriginalAudioVolume = 0.22;
+					vm.AudioMix.IsBgmMuted = true;
+					vm.AudioMix.BgmVolume = 0.0;
+				}
 
 				// UNMUTE AND BOOST KHMER TRANSLATED DUBBING
 				vm.AudioMix.IsKhmerMuted = false;
 				vm.AudioMix.KhmerDubVolume = 3.0;
-
-				// DO NOT LEAK CHINESE TALKING FROM CRUDE SEPARATED AUDIO
-				// Only keep BGM if the user chose a real music file outside SeparatedAudio
-				if (!string.IsNullOrEmpty(vm.AudioMix.BgmTrackPath) && vm.AudioMix.BgmTrackPath.Contains("SeparatedAudio"))
-				{
-					vm.AudioMix.IsBgmMuted = true;
-					vm.AudioMix.BgmVolume = 0.0;
-					vm.AudioMix.BgmTrackPath = null;
-				}
-				else if (string.IsNullOrEmpty(vm.AudioMix.BgmTrackPath) || !File.Exists(vm.AudioMix.BgmTrackPath))
-				{
-					vm.AudioMix.IsBgmMuted = true;
-					vm.AudioMix.BgmVolume = 0.0;
-				}
 			}
 
 			InjectTextLayersForExport(vm, window);
@@ -2207,17 +2206,25 @@ public static class Hook
 			// 2. Ensure Khmer dub volume is properly boosted and original Chinese audio is fully muted
 			if (vm.AudioMix != null)
 			{
-				vm.AudioMix.IsOriginalMuted = true;
-				vm.AudioMix.OriginalAudioVolume = 0.0;
-				vm.AudioMix.IsKhmerMuted = false;
-				vm.AudioMix.KhmerDubVolume = 3.0;
-
-				if (!string.IsNullOrEmpty(vm.AudioMix.BgmTrackPath) && vm.AudioMix.BgmTrackPath.Contains("SeparatedAudio"))
+				bool hasRealBgm = !string.IsNullOrEmpty(vm.AudioMix.BgmTrackPath) && File.Exists(vm.AudioMix.BgmTrackPath) && !vm.AudioMix.IsBgmMuted;
+				if (hasRealBgm)
 				{
+					vm.AudioMix.IsBgmMuted = false;
+					vm.AudioMix.BgmVolume = 0.32;
+					vm.AudioMix.IsOriginalMuted = true;
+					vm.AudioMix.OriginalAudioVolume = 0.0;
+				}
+				else
+				{
+					// Retain original audio as soft atmospheric background so movie is NEVER dead silent!
+					vm.AudioMix.IsOriginalMuted = false;
+					vm.AudioMix.OriginalAudioVolume = 0.22;
 					vm.AudioMix.IsBgmMuted = true;
 					vm.AudioMix.BgmVolume = 0.0;
-					vm.AudioMix.BgmTrackPath = null;
 				}
+
+				vm.AudioMix.IsKhmerMuted = false;
+				vm.AudioMix.KhmerDubVolume = 3.0;
 			}
 
 			// 3. Obtain displayed video bounds on the UI preview canvas
@@ -3076,7 +3083,7 @@ public static class Hook
 			var asmVer = typeof(Hook).Assembly.GetName().Version;
 			string currentVer = asmVer != null 
 				? (asmVer.Build >= 0 ? $"{asmVer.Major}.{asmVer.Minor}.{asmVer.Build}" : $"{asmVer.Major}.{asmVer.Minor}.0")
-				: "2.1.4";
+				: "2.1.5";
 			if (!string.IsNullOrEmpty(postUpdateVersion))
 			{
 				currentVer = postUpdateVersion;
@@ -3538,7 +3545,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.4");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.5");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3566,7 +3573,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.4");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.5");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -6310,9 +6317,9 @@ del ""%~f0""
 						}
 					}
 
-					// 2. Background Music Playback (Only for external music, never crude SeparatedAudio)
+					// 2. Background Music Playback
 					string bgmPath = vm.AudioMix?.BgmTrackPath;
-					if (!string.IsNullOrEmpty(bgmPath) && File.Exists(bgmPath) && !bgmPath.Contains("SeparatedAudio") && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
+					if (!string.IsNullOrEmpty(bgmPath) && File.Exists(bgmPath) && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
 					{
 						if (_previewLiveBgmPlayer.Source == null || !_previewLiveBgmPlayer.Source.LocalPath.Equals(Path.GetFullPath(bgmPath), StringComparison.OrdinalIgnoreCase))
 						{
@@ -6429,8 +6436,7 @@ del ""%~f0""
 						await SynthesizeSingleLineSafelyAsync(vm, dialogueLine);
 					}
 				}
-				SetPipelineStatus(vm, "ជំហាន 5/6៖ ពិនិត្យសម្រួល និងកែសម្រួលកុំឱ្យសំឡេងនិយាយជាន់គ្នា...");
-				await AutoFixAllDialogueOverlapsAsync(vm);
+				SetPipelineStatus(vm, "ជំហាន 5/6៖ រក្សាទុក និងរៀបចំគម្រោងសំឡេងខ្មែរ...");
 				try
 				{
 					await vm.SaveProjectAsync();
@@ -6558,7 +6564,6 @@ del ""%~f0""
 			{
 				return;
 			}
-			await AutoFixAllDialogueOverlapsAsync(vm);
 			vm.BusyStatusText = "Step 3/3: Mixing Khmer voices and building preview video...";
 			string pv = await BuildPreviewVideoAsync(vm);
 			if (_cancelRequested)
@@ -6922,15 +6927,17 @@ del ""%~f0""
 	{
 		try
 		{
-			if (string.IsNullOrWhiteSpace(audioPath) || !File.Exists(audioPath) || maxAllowedMs <= 300) return false;
+			if (string.IsNullOrWhiteSpace(audioPath) || !File.Exists(audioPath) || maxAllowedMs <= 400) return false;
 			int actualMs = GetAudioFileDurationMs(audioPath);
-			if (actualMs <= maxAllowedMs) return true;
+			// If already fits or only slightly longer (by up to 250ms), preserve 100% natural voice pacing
+			if (actualMs <= maxAllowedMs + 250) return true;
 
 			string ffmpeg = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", "ffmpeg.exe");
 			if (!File.Exists(ffmpeg)) ffmpeg = "ffmpeg";
 
 			double tempo = (double)actualMs / (double)maxAllowedMs;
-			double clampedTempo = Math.Min(1.48, Math.Max(1.05, tempo));
+			// Gentle tempo clamp (1.04 to 1.15 max). NEVER speed up unnaturally!
+			double clampedTempo = Math.Min(1.15, Math.Max(1.04, tempo));
 
 			string tempFitted = audioPath + ".fit.mp3";
 			ProcessStartInfo psi = new ProcessStartInfo
@@ -6947,33 +6954,7 @@ del ""%~f0""
 				p.WaitForExit(6000);
 				if (File.Exists(tempFitted) && new FileInfo(tempFitted).Length > 0)
 				{
-					int fittedMs = GetAudioFileDurationMs(tempFitted);
-					if (fittedMs > maxAllowedMs + 60)
-					{
-						double trimSec = maxAllowedMs / 1000.0;
-						double fadeStart = Math.Max(0.1, trimSec - 0.08);
-						string tempTrimmed = audioPath + ".trim.mp3";
-						ProcessStartInfo trimPsi = new ProcessStartInfo
-						{
-							FileName = ffmpeg,
-							Arguments = $"-y -i \"{tempFitted}\" -t {trimSec.ToString("0.###", CultureInfo.InvariantCulture)} -af \"afade=t=out:st={fadeStart.ToString("0.###", CultureInfo.InvariantCulture)}:d=0.08\" -c:a libmp3lame -b:a 192k \"{tempTrimmed}\"",
-							UseShellExecute = false,
-							CreateNoWindow = true,
-							RedirectStandardError = true
-						};
-						using (Process tp = Process.Start(trimPsi))
-						{
-							tp.StandardError.ReadToEnd();
-							tp.WaitForExit(6000);
-							if (File.Exists(tempTrimmed) && new FileInfo(tempTrimmed).Length > 0)
-							{
-								File.Copy(tempTrimmed, audioPath, true);
-								try { File.Delete(tempTrimmed); } catch { }
-								try { File.Delete(tempFitted); } catch { }
-								return true;
-							}
-						}
-					}
+					// NEVER hard-truncate with -t and afade! Always preserve the complete spoken thought!
 					File.Copy(tempFitted, audioPath, true);
 					try { File.Delete(tempFitted); } catch { }
 					return true;
@@ -7073,16 +7054,6 @@ del ""%~f0""
 			if (File.Exists(outPath) && new FileInfo(outPath).Length > 0)
 			{
 				EnsureAudioLoudnessBoost(outPath);
-
-				// Auto-fit audio duration to prevent speech collision with next line
-				try
-				{
-					DialogueLine nextLine = vm.DialogueLines?.FirstOrDefault(x => x.Index > l.Index && x.StartMs > l.StartMs);
-					int maxAllowedMs = (nextLine != null) ? (nextLine.StartMs - l.StartMs - 120) : (l.EndMs - l.StartMs + 800);
-					if (maxAllowedMs < 500) maxAllowedMs = 500;
-					AutoFitAudioDuration(outPath, maxAllowedMs);
-				}
-				catch { }
 
 				l.AudioFilePath = outPath;
 				l.LastSynthesizedText = l.CorrectedKhmer;
@@ -7298,7 +7269,7 @@ del ""%~f0""
 			return null;
 		}
 		string text = ((vm.AudioMix != null) ? vm.AudioMix.BgmTrackPath : null);
-		bool hasRealBgm = !string.IsNullOrEmpty(text) && File.Exists(text) && !text.Contains("SeparatedAudio") && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted);
+		bool hasRealBgm = !string.IsNullOrEmpty(text) && File.Exists(text) && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted);
 
 		string arguments;
 		if (hasRealBgm)
@@ -7308,9 +7279,9 @@ del ""%~f0""
 		}
 		else
 		{
-			// Pure Khmer dub dialogue: Video from movie, audio 100% pure loud Khmer dub (Zero Chinese vocal bleed)
-			Log("BuildPreviewVideoAsync: Muxing original video with pure clean loud Khmer dub dialogue (0% Chinese leak)");
-			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			// Background audio preserved from original movie: Ducked during Khmer speech, audible during pauses so movie is NEVER dead silent!
+			Log("BuildPreviewVideoAsync: Mixing original movie sound (sidechain ducked) with loud Khmer dub dialogue");
+			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -filter_complex \"[0:a]volume=0.28[bg_raw];[1:a]volume=1.0,alimiter=limit=0.98[a_khmer];[bg_raw][a_khmer]sidechaincompress=threshold=0.06:ratio=6:attack=15:release=350[ducked_bg];[ducked_bg][a_khmer]amix=inputs=2:normalize=0:duration=first:dropout_transition=0[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
 		}
 		ProcessStartInfo startInfo2 = new ProcessStartInfo
 		{
@@ -7325,6 +7296,24 @@ del ""%~f0""
 			string err = await proc.StandardError.ReadToEndAsync();
 			await proc.WaitForExitAsync();
 			Log($"FFmpeg video mux exit code: {proc.ExitCode}, output len: {err.Length}");
+		}
+		if (!File.Exists(previewVideo))
+		{
+			Log("BuildPreviewVideoAsync: Sidechain mux failed or video has no 0:a stream. Falling back to direct dub dialogue mux.");
+			string fallbackArgs = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			ProcessStartInfo fbPsi = new ProcessStartInfo
+			{
+				FileName = ffmpegPath,
+				Arguments = fallbackArgs,
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardError = true
+			};
+			using (Process fbProc = Process.Start(fbPsi))
+			{
+				await fbProc.StandardError.ReadToEndAsync();
+				await fbProc.WaitForExitAsync();
+			}
 		}
 		try { File.Delete(tempDubAudio); } catch { }
 		if (File.Exists(previewVideo))
