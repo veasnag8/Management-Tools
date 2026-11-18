@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.1.5";
+			window.Title = "SNA-Dubber Version 2.1.6";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -366,9 +366,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.5", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.6", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 2.1.5";
+				window.Title = "SNA-Dubber Version 2.1.6";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -616,7 +616,7 @@ public static class Hook
 			{
 				client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", deviceToken);
 			}
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.5");
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.6");
 
 			var payload = new
 			{
@@ -1935,14 +1935,14 @@ public static class Hook
 
 		foreach (DialogueLine line in vm.DialogueLines)
 		{
-			if (string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath) || new FileInfo(line.AudioFilePath).Length < 100)
+			if (string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath) || new FileInfo(line.AudioFilePath).Length < 3500)
 			{
 				if (!string.IsNullOrEmpty(cacheDir))
 				{
 					string cand1 = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
 					string cand2 = Path.Combine(cacheDir, $"line_{line.Index}.wav");
-					if (File.Exists(cand1) && new FileInfo(cand1).Length > 100) line.AudioFilePath = cand1;
-					else if (File.Exists(cand2) && new FileInfo(cand2).Length > 100) line.AudioFilePath = cand2;
+					if (File.Exists(cand1) && new FileInfo(cand1).Length > 3500) line.AudioFilePath = cand1;
+					else if (File.Exists(cand2) && new FileInfo(cand2).Length > 3500) line.AudioFilePath = cand2;
 				}
 
 				// If not found in current project's cache, search across other project caches in AudioCache
@@ -1956,7 +1956,7 @@ public static class Hook
 							foreach (string otherProjDir in Directory.GetDirectories(baseAudioCache))
 							{
 								string otherCand = Path.Combine(otherProjDir, $"line_{line.Index}.mp3");
-								if (File.Exists(otherCand) && new FileInfo(otherCand).Length > 100)
+								if (File.Exists(otherCand) && new FileInfo(otherCand).Length > 3500)
 								{
 									if (!string.IsNullOrEmpty(cacheDir))
 									{
@@ -1977,7 +1977,7 @@ public static class Hook
 				}
 			}
 
-			if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath) && new FileInfo(line.AudioFilePath).Length > 100)
+			if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath) && new FileInfo(line.AudioFilePath).Length > 3500)
 			{
 				line.IsApproved = true;
 				approved++;
@@ -1997,14 +1997,14 @@ public static class Hook
 				try
 				{
 					string text = !string.IsNullOrWhiteSpace(line.CorrectedKhmer) ? line.CorrectedKhmer : line.DraftKhmer;
-					string voice = string.IsNullOrWhiteSpace(line.VoiceProfile) ? "piset" : line.VoiceProfile;
+					string voice = string.IsNullOrWhiteSpace(line.VoiceProfile) ? ResolveDialogueVoice(line) : line.VoiceProfile;
 					string outPath = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
 					double speed = line.Speed > 0.1 ? line.Speed : 1.0;
 					double volume = line.Volume > 0.1 ? line.Volume : 1.0;
 					int pitch = line.Pitch;
 
 					bool ok = RunDirectPythonTtsAsync(text, outPath, voice, speed, volume, pitch).GetAwaiter().GetResult();
-					if (ok && File.Exists(outPath) && new FileInfo(outPath).Length > 100)
+					if (ok && File.Exists(outPath) && new FileInfo(outPath).Length > 3500)
 					{
 						line.AudioFilePath = outPath;
 						line.IsApproved = true;
@@ -3083,7 +3083,7 @@ public static class Hook
 			var asmVer = typeof(Hook).Assembly.GetName().Version;
 			string currentVer = asmVer != null 
 				? (asmVer.Build >= 0 ? $"{asmVer.Major}.{asmVer.Minor}.{asmVer.Build}" : $"{asmVer.Major}.{asmVer.Minor}.0")
-				: "2.1.5";
+				: "2.1.6";
 			if (!string.IsNullOrEmpty(postUpdateVersion))
 			{
 				currentVer = postUpdateVersion;
@@ -3545,7 +3545,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.5");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.6");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3573,7 +3573,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.5");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.6");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -6426,10 +6426,13 @@ del ""%~f0""
 						return;
 					}
 					DialogueLine dialogueLine = synthesisLines[i];
+					bool audioFileValid = !string.IsNullOrEmpty(dialogueLine.AudioFilePath) 
+						&& File.Exists(dialogueLine.AudioFilePath) 
+						&& new FileInfo(dialogueLine.AudioFilePath).Length > 3500;
 					bool textChanged = string.Equals(dialogueLine.LastSynthesizedText, "__VOICE_SPEED_CHANGED__", StringComparison.Ordinal)
 						|| (!string.IsNullOrWhiteSpace(dialogueLine.CorrectedKhmer)
 							&& !string.Equals(dialogueLine.LastSynthesizedText, dialogueLine.CorrectedKhmer, StringComparison.Ordinal));
-					if (textChanged || string.IsNullOrEmpty(dialogueLine.AudioFilePath) || !File.Exists(dialogueLine.AudioFilePath) || new FileInfo(dialogueLine.AudioFilePath).Length == 0L)
+					if (textChanged || !audioFileValid)
 					{
 						vm.BusyProgressPercent = 50.0 + 30.0 * (i + 1) / Math.Max(1, synthesisLines.Count);
 						SetPipelineStatus(vm, $"ជំហាន 4/6៖ បង្កើត ពិនិត្យ និងបំពេញសំឡេងខ្មែរដែលខ្វះ ({i + 1}/{vm.DialogueLines.Count}) បន្ទាត់ទី {dialogueLine.Index}...");
@@ -6532,7 +6535,7 @@ del ""%~f0""
 				List<DialogueLine> linesToSynthesize = new List<DialogueLine>();
 				foreach (DialogueLine dialogueLine2 in vm.DialogueLines)
 				{
-					bool num = string.IsNullOrEmpty(dialogueLine2.AudioFilePath) || !File.Exists(dialogueLine2.AudioFilePath) || new FileInfo(dialogueLine2.AudioFilePath).Length == 0;
+					bool num = string.IsNullOrEmpty(dialogueLine2.AudioFilePath) || !File.Exists(dialogueLine2.AudioFilePath) || new FileInfo(dialogueLine2.AudioFilePath).Length < 3500;
 					bool flag = dialogueLine2.LastSynthesizedText != dialogueLine2.CorrectedKhmer;
 					if (num | flag)
 					{
@@ -7020,7 +7023,14 @@ del ""%~f0""
 			string text2 = ((!string.IsNullOrWhiteSpace(l.CorrectedKhmer)) ? l.CorrectedKhmer : l.DraftKhmer);
 			if (string.IsNullOrWhiteSpace(text2))
 			{
-				text2 = ".";
+				text2 = l.ChineseText;
+			}
+			if (string.IsNullOrWhiteSpace(text2))
+			{
+				GenerateSilentAudioDirect(outPath, 0.4);
+				l.AudioFilePath = outPath;
+				l.LastSynthesizedText = "__EMPTY_TEXT__";
+				return false;
 			}
 			string voice = ResolveDialogueVoice(l);
 			l.VoiceProfile = voice;
@@ -7034,7 +7044,7 @@ del ""%~f0""
 			try
 			{
 				FieldInfo field = typeof(MainViewModel).GetField("_pythonEngine", BindingFlags.Instance | BindingFlags.NonPublic);
-				if (field != null && field.GetValue(vm) is IPythonEngineService pythonEngineService && (await pythonEngineService.SynthesizeSentenceAsync(text2, outPath, voice, speed, volume, pitch, CancellationToken.None)).Item1 && File.Exists(outPath) && new FileInfo(outPath).Length > 0)
+				if (field != null && field.GetValue(vm) is IPythonEngineService pythonEngineService && (await pythonEngineService.SynthesizeSentenceAsync(text2, outPath, voice, speed, volume, pitch, CancellationToken.None)).Item1 && File.Exists(outPath) && new FileInfo(outPath).Length > 3500)
 				{
 					synthesized = true;
 				}
@@ -7047,17 +7057,21 @@ del ""%~f0""
 			{
 				synthesized = await RunDirectPythonTtsAsync(text2, outPath, voice, speed, volume, pitch);
 			}
-			if (!synthesized || !File.Exists(outPath) || new FileInfo(outPath).Length == 0L)
-			{
-				GenerateSilentAudioDirect(outPath, 0.4);
-			}
-			if (File.Exists(outPath) && new FileInfo(outPath).Length > 0)
+			if (synthesized && File.Exists(outPath) && new FileInfo(outPath).Length > 3500)
 			{
 				EnsureAudioLoudnessBoost(outPath);
 
 				l.AudioFilePath = outPath;
 				l.LastSynthesizedText = l.CorrectedKhmer;
+				l.IsApproved = true;
 				return true;
+			}
+			else
+			{
+				GenerateSilentAudioDirect(outPath, 0.4);
+				l.AudioFilePath = outPath;
+				l.LastSynthesizedText = "__SYNTHESIS_FAILED__";
+				return false;
 			}
 		}
 		catch (Exception ex2)
@@ -7119,7 +7133,7 @@ del ""%~f0""
 				process.StandardError.ReadToEnd();
 				process.WaitForExit();
 			}
-			return File.Exists(outPath) && new FileInfo(outPath).Length > 0;
+			return File.Exists(outPath) && new FileInfo(outPath).Length > 3500;
 		}
 		catch
 		{
@@ -7177,7 +7191,7 @@ del ""%~f0""
 			catch
 			{
 			}
-			return File.Exists(outPath) && new FileInfo(outPath).Length > 0;
+			return File.Exists(outPath) && new FileInfo(outPath).Length > 3500;
 		}
 		catch
 		{

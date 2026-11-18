@@ -1,13 +1,13 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.1.5",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.5/ToolDubber-Setup-v2.1.5.exe",
-  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.5/ToolDubber-Patch-v2.1.5.zip",
-  "patch_sha256": "944344a5dcae5249c197dfce356375b8781eb3f9be5219c839f9e071e89507a1",
-  "patch_size_bytes": 1791122,
+  "latest_version": "2.1.6",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.6/ToolDubber-Setup-v2.1.6.exe",
+  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.6/ToolDubber-Patch-v2.1.6.zip",
+  "patch_sha256": "a12961a8cabab53e6689cfee00b7894233b96f36f5047effd85666c30ba04a91",
+  "patch_size_bytes": 1791478,
   "min_patch_version": "2.0.0",
-  "release_notes": "កំណែថ្មី Version 2.1.5 រួមមាន:\n1. 🎬 Natural Spoken Khmer & Storyline Continuity (បកប្រែបែបភាសានិយាយកុនរលូន ស៊ីសង្វាក់គ្នាតាមសាច់រឿង និងហេតុការណ៍): លុបបំបាត់បញ្ហាបកប្រែដាច់កង់ៗ ឬដាច់សាច់រឿង ដោយកំណត់ឱ្យ AI បកប្រែមានន័យពេញលេញ រស់រវើក ដូចអ្នកបញ្ចូលសំឡេងភាពយន្តអាជីព\n2. 🎙️ Complete Natural Voice Pace (សំឡេងនិយាយចប់ប្រយោគពេញលេញ 100% មិនកាត់ចុងប្រយោគ): លុបបំបាត់ការកាត់តម្រឹមសំឡេង (Hard Trim) ធ្វើឱ្យសំឡេងខ្មែរនិយាយចប់គ្រប់ព្យាង្គ មិនរហ័សកន្ត្រាក់ ឬកាត់ដាច់ពាក្យពាក់កណ្តាលឡើយ\n3. 🎵 Ambient Movie Sound & Foley (មិនស្ងាត់ជ្រៀបពេលគ្មានភ្លេង BGM): រក្សាសំឡេងបរិយាកាស និង Effect របស់វីដេអូដើមដោយស្វ័យប្រវត្តិតាមរយៈ Sidechain Compression Ducking ធ្វើឱ្យពេលតួអង្គនិយាយ សំឡេងខ្មែរលឺច្បាស់ 100% ហើយពេលស្ងាត់ សំឡេងភ្លេងដើមលឺពិរោះរណ្តំ មិនស្ងាត់ជ្រៀបឡើយ\n4. 👥 Smart Gender Voice Recognition: ស្គាល់តួអង្គប្រុស (Piset) និងស្រី (Sreymom) ដោយស្វ័យប្រវត្តិ",
-  "sha256": "de37bb023c07d87fe5135c9bb5ea9df5e67146c9254bde2aad1aa80e46e70391",
+  "release_notes": "កំណែថ្មី Version 2.1.6 រួមមាន:\n1. 👩‍🦰 Fix Female Voice (ជួសជុលសំឡេងស្រី Sreymom ដំណើរការ 100%): កែសម្រួល Edge-TTS SSML ដោយដកចេញប៉ារ៉ាម៉ែត្រដែលបណ្តាលឱ្យ Server បដិសេធ (NoAudioReceived) ធ្វើឱ្យសំឡេងស្រីដំណើរការពិរោះ រលូន និងច្បាស់ 100%\n2. 🎙️ Auto Recovery for Missing Voices (ជួសជុលសំឡេងដែលបាត់ / ខ្លះលឺខ្លះអត់): ប្រព័ន្ធពិនិត្យរកឃើញរាល់ File សំឡេងណាដែលស្ងាត់ ឬខូច (< 3500 bytes) ហើយ Generate បង្កើតជាសំឡេងនិយាយពិតប្រាកដឡើងវិញដោយស្វ័យប្រវត្តិ ធានាមិនបាត់សំឡេងបន្ទាត់ណាឡើយ\n3. 🎬 Natural Cinema Dubbing & Story Flow: បកប្រែភាសានិយាយកុនរលូន ស៊ីសង្វាក់គ្នាតាមសាច់រឿង និងហេតុការណ៍ មិនកាត់ចុងប្រយោគ\n4. 🎵 Movie Background Audio Preservation: រក្សាភ្លេង និង Sound Effects របស់រឿងដើម (Sidechain ducking) មិនស្ងាត់ជ្រៀប",
+  "sha256": "03af5af028cb1db79d846ec3d19b9ae1caf8f4a8559c5469863eb38d7cb3878f",
   "mandatory": false
 }

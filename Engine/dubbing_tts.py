@@ -40,17 +40,61 @@ async def _synthesize_async(
     volume: str = "+0%",
     pitch: str = "+0Hz"
 ) -> bool:
-    """Async generation with edge-tts."""
+    """Async generation with edge-tts with resilient multi-tier fallback."""
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    communicate = edge_tts.Communicate(
-        text=text,
-        voice=voice_name,
-        rate=rate,
-        volume=volume,
-        pitch=pitch
-    )
-    await communicate.save(output_path)
-    return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+    clean_text = (text or "").strip()
+    if not clean_text:
+        return False
+
+    is_female = "sreymom" in voice_name.lower() or "female" in voice_name.lower()
+
+    # Tier 1: Try requested voice with rate.
+    # CRITICAL: Microsoft Edge TTS rejects volume != "+0%" and pitch != "+0Hz" for km-KH-SreymomNeural!
+    eff_volume = "+0%" if is_female else volume
+    eff_pitch = "+0Hz" if is_female else pitch
+
+    try:
+        communicate = edge_tts.Communicate(
+            text=clean_text,
+            voice=voice_name,
+            rate=rate,
+            volume=eff_volume,
+            pitch=eff_pitch
+        )
+        await communicate.save(output_path)
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
+            return True
+    except Exception as e1:
+        sys.stderr.write(f"Edge TTS tier 1 failed for {voice_name}: {e1}\n")
+
+    # Tier 2: Try pure clean call without rate/pitch/volume
+    try:
+        communicate = edge_tts.Communicate(
+            text=clean_text,
+            voice=voice_name
+        )
+        await communicate.save(output_path)
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
+            return True
+    except Exception as e2:
+        sys.stderr.write(f"Edge TTS tier 2 failed for {voice_name}: {e2}\n")
+
+    # Tier 3: If female voice failed on server, fallback to male voice so dialogue is NEVER missing!
+    if is_female:
+        try:
+            sys.stderr.write(f"Falling back from {voice_name} to km-KH-PisethNeural\n")
+            communicate = edge_tts.Communicate(
+                text=clean_text,
+                voice="km-KH-PisethNeural",
+                rate=rate
+            )
+            await communicate.save(output_path)
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
+                return True
+        except Exception as e3:
+            sys.stderr.write(f"Edge TTS tier 3 fallback failed: {e3}\n")
+
+    return False
 
 def get_audio_duration_ms(file_path: str) -> int:
     """Retrieves audio duration in milliseconds using ffprobe."""
@@ -72,17 +116,18 @@ def get_audio_duration_ms(file_path: str) -> int:
 def auto_fit_duration(file_path: str, max_duration_ms: int) -> bool:
     """
     Prevents dialogue audio overlap (កុំអោយនិយាយជាន់សំឡេងគ្នា).
-    If audio duration exceeds max_duration_ms, speeds up via FFmpeg atempo
+    If audio duration exceeds max_duration_ms, applies gentle atempo
     so the spoken sentence finishes cleanly before the next sentence begins.
+    NEVER hard-trims or slices sentences in half!
     """
-    if not os.path.exists(file_path) or max_duration_ms <= 300:
+    if not os.path.exists(file_path) or max_duration_ms <= 400:
         return False
     actual_ms = get_audio_duration_ms(file_path)
-    if actual_ms <= max_duration_ms:
+    if actual_ms <= max_duration_ms + 250:
         return True
 
     tempo = actual_ms / float(max_duration_ms)
-    clamped_tempo = min(1.48, max(1.05, tempo))
+    clamped_tempo = min(1.15, max(1.04, tempo))
     temp_fitted = file_path + ".fit.mp3"
     try:
         cmd = [
@@ -93,23 +138,6 @@ def auto_fit_duration(file_path: str, max_duration_ms: int) -> bool:
         ]
         res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
         if res.returncode == 0 and os.path.exists(temp_fitted) and os.path.getsize(temp_fitted) > 0:
-            fitted_ms = get_audio_duration_ms(temp_fitted)
-            if fitted_ms > max_duration_ms + 60:
-                trim_sec = max_duration_ms / 1000.0
-                temp_trimmed = file_path + ".trim.mp3"
-                trim_cmd = [
-                    "ffmpeg", "-y", "-i", temp_fitted,
-                    "-t", f"{trim_sec:.3f}",
-                    "-af", f"afade=t=out:st={max(0.1, trim_sec - 0.08):.3f}:d=0.08",
-                    "-c:a", "libmp3lame", "-b:a", "192k",
-                    temp_trimmed
-                ]
-                subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
-                if os.path.exists(temp_trimmed) and os.path.getsize(temp_trimmed) > 0:
-                    os.replace(temp_trimmed, file_path)
-                    try: os.remove(temp_fitted)
-                    except: pass
-                    return True
             os.replace(temp_fitted, file_path)
             return True
     except Exception as e:
@@ -137,16 +165,20 @@ def synthesize_sentence(
         return {"success": False, "error": "Empty text"}
 
     voice_tag = resolve_voice(voice_id)
+    is_female = "sreymom" in voice_tag.lower() or "female" in voice_tag.lower()
 
     # Convert speed float to rate string (e.g. 1.15 -> +15%, 0.85 -> -15%)
     rate_pct = int(round((speed - 1.0) * 100))
     rate_str = f"{'+' if rate_pct >= 0 else ''}{rate_pct}%"
 
-    # User requested: Khmer speech to be much louder and punchier
-    vol_str = "+100%"
+    # Volume: Use +0% in Edge-TTS so Microsoft never rejects requests.
+    # FFmpeg applies studio loudness boost (volume=2.6) below without clipping!
+    vol_str = "+0%"
 
     effective_pitch = pitch_hz
-    if effective_pitch == 0 and voice_id:
+    if is_female:
+        effective_pitch = 0  # Sreymom requires +0Hz on MS servers
+    elif effective_pitch == 0 and voice_id:
         v_low = voice_id.lower()
         if "spk_3" in v_low or "speaker 3" in v_low:
             effective_pitch = -2

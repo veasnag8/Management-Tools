@@ -43,8 +43,8 @@ def get_or_create_release(tag, name, base_headers):
 
 def main():
     token = get_git_token()
-    tag = "v2.1.5"
-    name = "Tool Dubber v2.1.5"
+    tag = "v2.1.6"
+    name = "Tool Dubber v2.1.6"
     base_headers = {
         'Authorization': f'token {token}',
         'User-Agent': 'ToolDubber-Release'
@@ -67,13 +67,13 @@ def main():
             print("Deleted.")
 
     # 1. Upload Patch ZIP
-    patch_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Patch-v2.1.5.zip'
+    patch_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Patch-v2.1.6.zip'
     patch_size = os.path.getsize(patch_path)
     print(f"\nUploading Patch: {patch_path} ({patch_size} bytes)...")
     with open(patch_path, 'rb') as f:
         patch_data = f.read()
 
-    patch_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Patch-v2.1.5.zip"
+    patch_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Patch-v2.1.6.zip"
     patch_headers = dict(base_headers)
     patch_headers['Content-Type'] = 'application/zip'
     patch_headers['Content-Length'] = str(patch_size)
@@ -84,13 +84,13 @@ def main():
         print(f"✓ Patch uploaded successfully: {res.get('browser_download_url')} (size: {res.get('size')})")
 
     # 2. Upload Setup EXE
-    setup_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Setup-v2.1.5.exe'
+    setup_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Setup-v2.1.6.exe'
     setup_size = os.path.getsize(setup_path)
     print(f"\nUploading Setup EXE: {setup_path} ({setup_size} bytes)... This may take 1-2 minutes.")
     with open(setup_path, 'rb') as f:
         setup_data = f.read()
 
-    setup_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Setup-v2.1.5.exe"
+    setup_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Setup-v2.1.6.exe"
     setup_headers = dict(base_headers)
     setup_headers['Content-Type'] = 'application/octet-stream'
     setup_headers['Content-Length'] = str(setup_size)
