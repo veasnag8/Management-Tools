@@ -1,11 +1,12 @@
 $src = "D:\Project\Release_v1.2.0\SNA-Dubber"
 $outputDir = "D:\Project\Release_v1.2.0\Output"
-$patchZip = Join-Path $outputDir "ToolDubber-Patch-v2.1.3.zip"
-$stage = Join-Path $env:TEMP "patch_stage_v213"
+$patchZip = Join-Path $outputDir "ToolDubber-Patch-v2.1.4.zip"
+$stage = Join-Path $env:TEMP "patch_stage_v214"
 
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Path (Join-Path $stage "Engine") -Force | Out-Null
 Copy-Item (Join-Path $src "SnaDubber.UIHook.dll") $stage -Force
+Copy-Item (Join-Path $src "SnaDubber.dll") $stage -Force
 Get-ChildItem (Join-Path $src "Engine") -File | Where-Object { $_.Extension -in ".py",".txt" } | Copy-Item -Destination (Join-Path $stage "Engine") -Force
 
 if (Test-Path $patchZip) { Remove-Item $patchZip -Force }
@@ -22,7 +23,7 @@ $iss = "D:\Project\Release_v1.2.0\Management-Tools\installer\setup.iss"
 
 & $iscc $iss
 if ($LASTEXITCODE -eq 0) {
-    $out = Join-Path $outputDir "ToolDubber-Setup-v2.1.3.exe"
+    $out = Join-Path $outputDir "ToolDubber-Setup-v2.1.4.exe"
     $h = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
     $sz = (Get-Item $out).Length
     Write-Host "EXE_SHA256=$h"

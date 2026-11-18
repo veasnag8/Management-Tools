@@ -1,13 +1,13 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.1.3",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.3/ToolDubber-Setup-v2.1.3.exe",
-  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.3/ToolDubber-Patch-v2.1.3.zip",
-  "patch_sha256": "50109e428d065a807fa5ba2f42ee5806d0fc4b6eaf2adb8177decd74f8646aab",
-  "patch_size_bytes": 175383,
+  "latest_version": "2.1.4",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.4/ToolDubber-Setup-v2.1.4.exe",
+  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.4/ToolDubber-Patch-v2.1.4.zip",
+  "patch_sha256": "1f044020a017ac2c0174c0d17d2c9191abf8cd72a3d0f896e88737a3cbe43295",
+  "patch_size_bytes": 1791353,
   "min_patch_version": "2.0.0",
-  "release_notes": "កំណែថ្មី Version 2.1.3 រួមមាន:\n1. ⚡ Fix No Speech Detected & Support All Gemini Keys: កែសម្រួលបញ្ហាចេញផ្ទាំង No Speech Detected ឬគាំង 48% ដោយសារ API Key ជំនាន់ថ្មី និងបន្ថែមម៉ូឌែល Gemini 3.5 Flash Lite & Gemini 3.8 Flash លឿនរហ័ស 1-2 វិនាទី\n2. 🔊 Fix Video Playback & Preview Sound: កែសម្រួលសំឡេងវីដេអូ និងសំឡេង Preview ឱ្យឮច្បាស់ពេញលេញ មិនស្ងាត់ មិនបាត់សំឡេងពេលចុច Play (Dynamic Audio Ducking រក្សាភ្លេង BGM ដើម + សំឡេងខ្មែរ)\n3. ⚡ Auto-Fix Audio Overlaps (ជួសជុលសំឡេងជាន់គ្នា): Gemini បកប្រែខ្លីខ្លឹមសមល្មមតាមកាលវេលា និងប្រព័ន្ធ FFmpeg atempo កែសម្រួលល្បឿនដោយស្វ័យប្រវត្តិ ធានាថាសំឡេងនិយាយមិនជាន់គ្នាដាច់ខាត\n4. 🔊 Default Voice Speed 1.25x (58%): កំណត់ល្បឿនសំឡេង Voice Speed លំនាំដើមត្រឹម 1.25x (=58% លើ Slider) ច្បាស់ ពីរោះ ស្តាប់ស្រួលបែបធម្មជាតិ\n5. 👥 Multi-Speaker Diarization & Auto Gender: បែងចែកតួអង្គនិយាយច្រើននាក់ និងសម្គាល់សំឡេងមនុស្សប្រុស (Piseth) និងមនុស្សស្រី (Sreymom) ដោយស្វ័យប្រវត្តិ\n6. 📁 Episodes Batch Import & Translate: អាចនាំចូលវីដេអូច្រើនភាគពី Folder ឬ Files ហើយចុច Translate Selected តែម្ដង",
-  "sha256": "0b2f3e36eca8620d4b516588e5f35d280d51989b73261858899805dd38e3447a",
+  "release_notes": "កំណែថ្មី Version 2.1.4 រួមមាន:\n1. 🔊 Fix Preview Playback (កែសម្រួលសំឡេង Preview ពេលចុច Play): ធានាថានិយាយសំឡេងខ្មែរ 100% មិនលេចសំឡេងដើមឡើយ\n2. ⚖️ Fix Sound Volume Consistency (កែសម្រួលតុល្យភាពកម្រិតសំឡេងដើម និងចុងវីដេអូ): លុបបំបាត់បញ្ហាដើមវីដេអូលឺតិចតែចុងវីដេអូលឺខ្លាំង ដោយប្រើ normalize=0 និង dropout_transition=0 ទាំងក្នុង Preview និងពេល Export វីដេអូ ធ្វើឱ្យកម្រិតសំឡេងបកប្រែខ្មែរលឺច្បាស់ស្មើគ្នា 100% ចាប់ពីនាទីដំបូងរហូតដល់ចប់\n3. ⚡ Fast Preview Generation: បង្កើតវីដេអូ Preview យ៉ាងរហ័សត្រឹម 2-3 វិនាទី និងចាក់វីដេអូ Preview ដោយស្វ័យប្រវត្តិកម្រិតខ្ពស់\n4. 👥 Multi-Speaker & Auto Gender: ស្គាល់តួអង្គប្រុសស្រី auto និងបំបែកសំឡេងច្បាស់",
+  "sha256": "dbdab0c5ffee63b775e4f7cc2f5e66a29c1777f18c9a2fb7fcbdbfcbba21cc5e",
   "mandatory": false
 }

@@ -323,7 +323,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.1.3";
+			window.Title = "SNA-Dubber Version 2.1.4";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -366,9 +366,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.3", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.4", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 2.1.3";
+				window.Title = "SNA-Dubber Version 2.1.4";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -616,7 +616,7 @@ public static class Hook
 			{
 				client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", deviceToken);
 			}
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.3");
+			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.4");
 
 			var payload = new
 			{
@@ -3076,7 +3076,7 @@ public static class Hook
 			var asmVer = typeof(Hook).Assembly.GetName().Version;
 			string currentVer = asmVer != null 
 				? (asmVer.Build >= 0 ? $"{asmVer.Major}.{asmVer.Minor}.{asmVer.Build}" : $"{asmVer.Major}.{asmVer.Minor}.0")
-				: "2.1.3";
+				: "2.1.4";
 			if (!string.IsNullOrEmpty(postUpdateVersion))
 			{
 				currentVer = postUpdateVersion;
@@ -3538,7 +3538,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.3");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.4");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3566,7 +3566,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.3");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.4");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -6087,6 +6087,74 @@ del ""%~f0""
 				catch { }
 			};
 
+			Button stepBackBtn = FindAllVisualChildren<Button>((DependencyObject)(object)window)
+				.FirstOrDefault(b => (b.ToolTip as string ?? "").IndexOf("Step backward", StringComparison.OrdinalIgnoreCase) >= 0);
+			if (stepBackBtn != null && stepBackBtn.Parent is Panel panel)
+			{
+				var panelButtons = panel.Children.OfType<Button>().ToList();
+				int pIdx = panelButtons.IndexOf(stepBackBtn);
+				if (pIdx > 0)
+				{
+					Button playBtn = panelButtons[pIdx - 1];
+					if (playBtn.Tag as string != "PlayPauseHooked")
+					{
+						playBtn.Tag = "PlayPauseHooked";
+						playBtn.PreviewMouseLeftButtonDown += (s, e) =>
+						{
+							try
+							{
+								if (vm.CurrentProject == null || string.IsNullOrEmpty(vm.CurrentProject.Id)) return;
+								string projectDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "PreviewCache", vm.CurrentProject.Id);
+								string staticPreviewVideo = Path.Combine(projectDir, "preview_khmer.mp4");
+								bool hasKhmerAudio = vm.DialogueLines != null && vm.DialogueLines.Any(l => !string.IsNullOrEmpty(l.AudioFilePath) && File.Exists(l.AudioFilePath));
+
+								if (hasKhmerAudio && File.Exists(staticPreviewVideo))
+								{
+									if (player.Source == null || !player.Source.LocalPath.Equals(staticPreviewVideo, StringComparison.OrdinalIgnoreCase))
+									{
+										TimeSpan pos = player.Position;
+										player.Source = new Uri(staticPreviewVideo);
+										player.Position = pos;
+									}
+									player.IsMuted = false;
+									player.Volume = 1.0;
+								}
+								else if (hasKhmerAudio)
+								{
+									// Mute raw movie video immediately so Chinese voice never leaks!
+									player.IsMuted = true;
+									player.Volume = 0.0;
+
+									// Auto-build preview video asynchronously in background
+									_ = Task.Run(async () =>
+									{
+										try
+										{
+											string pv = await BuildPreviewVideoAsync(vm);
+											if (!string.IsNullOrEmpty(pv) && File.Exists(pv))
+											{
+												((DispatcherObject)window).Dispatcher.Invoke((Action)(() =>
+												{
+													TimeSpan cur = player.Position;
+													bool playing = vm.IsPlaying;
+													player.Source = new Uri(pv);
+													player.Position = cur;
+													player.IsMuted = false;
+													player.Volume = 1.0;
+													if (playing) player.Play();
+												}));
+											}
+										}
+										catch { }
+									});
+								}
+							}
+							catch { }
+						};
+					}
+				}
+			}
+
 			Slider slider = FindVisualChild((DependencyObject)(object)window, (Slider s) => s.Name == "TimelineSlider");
 			if (slider != null)
 			{
@@ -6152,7 +6220,17 @@ del ""%~f0""
 						}
 					}
 
-					if (player.IsMuted) player.IsMuted = false;
+					bool hasKhmerAudio = vm.DialogueLines != null && vm.DialogueLines.Any(l => !string.IsNullOrEmpty(l.AudioFilePath) && File.Exists(l.AudioFilePath));
+					if (hasKhmerAudio)
+					{
+						// Keep raw video muted so Chinese dialogue never leaks out!
+						if (!player.IsMuted) player.IsMuted = true;
+						if (player.Volume > 0.0) player.Volume = 0.0;
+					}
+					else
+					{
+						if (player.IsMuted) player.IsMuted = false;
+					}
 
 					if (!vm.IsPlaying)
 					{
@@ -6201,8 +6279,12 @@ del ""%~f0""
 							_previewLiveKhmerPlayer.Play();
 						}
 
-						// Audio ducking: lower original video sound to 20% so character's Khmer voice is crisp and clear
-						if (player.Volume > 0.25 || player.IsMuted)
+						if (hasKhmerAudio)
+						{
+							if (!player.IsMuted) player.IsMuted = true;
+							if (player.Volume > 0.0) player.Volume = 0.0;
+						}
+						else if (player.Volume > 0.25 || player.IsMuted)
 						{
 							player.IsMuted = false;
 							player.Volume = 0.20;
@@ -6216,8 +6298,12 @@ del ""%~f0""
 							try { _previewLiveKhmerPlayer.Stop(); } catch { }
 						}
 
-						// Restore full movie volume for background sound and effects
-						if (player.Volume < 0.95 || player.IsMuted)
+						if (hasKhmerAudio)
+						{
+							if (!player.IsMuted) player.IsMuted = true;
+							if (player.Volume > 0.0) player.Volume = 0.0;
+						}
+						else if (player.Volume < 0.95 || player.IsMuted)
 						{
 							player.IsMuted = false;
 							player.Volume = 1.0;
@@ -7174,7 +7260,6 @@ del ""%~f0""
 		StringBuilder stringBuilder2 = new StringBuilder();
 		for (int i = 0; i < list.Count; i++)
 		{
-			EnsureAudioLoudnessBoost(list[i].AudioFilePath);
 			StringBuilder stringBuilder3 = stringBuilder;
 			StringBuilder stringBuilder4 = stringBuilder3;
 			StringBuilder.AppendInterpolatedStringHandler handler = new StringBuilder.AppendInterpolatedStringHandler(6, 1, stringBuilder3);
@@ -7192,7 +7277,7 @@ del ""%~f0""
 			handler.AppendLiteral("]");
 			stringBuilder5.Append(ref handler);
 		}
-		list2.Add($"{stringBuilder2}amix=inputs={list.Count}:normalize=0:duration=longest:dropout_transition=0,volume=2.6,alimiter=limit=0.98[a_dub]");
+		list2.Add($"{stringBuilder2}amix=inputs={list.Count}:normalize=0:duration=longest:dropout_transition=0,volume=1.0,alimiter=limit=0.98[a_dub]");
 		string value2 = string.Join(";", list2);
 		ProcessStartInfo startInfo = new ProcessStartInfo
 		{
@@ -7213,25 +7298,19 @@ del ""%~f0""
 			return null;
 		}
 		string text = ((vm.AudioMix != null) ? vm.AudioMix.BgmTrackPath : null);
-		if (string.IsNullOrEmpty(text) || !File.Exists(text))
-		{
-			string text2 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "SeparatedAudio", vm.CurrentProject.Id, "bgm_track.wav");
-			if (File.Exists(text2))
-			{
-				text = text2;
-			}
-		}
+		bool hasRealBgm = !string.IsNullOrEmpty(text) && File.Exists(text) && !text.Contains("SeparatedAudio") && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted);
+
 		string arguments;
-		if (!string.IsNullOrEmpty(text) && File.Exists(text) && (vm.AudioMix == null || !vm.AudioMix.IsBgmMuted))
+		if (hasRealBgm)
 		{
-			Log("BuildPreviewVideoAsync: Mixing with dynamic audio ducking BGM track and boosted Khmer voice: " + text);
-			arguments = $"-y -i \"{videoPath}\" -i \"{text}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=0.85[a_bgm_raw];[2:a]volume=2.8,alimiter=limit=0.98[a_khmer];[a_bgm_raw][a_khmer]sidechaincompress=threshold=0.08:ratio=5:attack=15:release=350[ducked_bgm];[ducked_bgm][a_khmer]amix=inputs=2:normalize=0:duration=first[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			Log("BuildPreviewVideoAsync: Mixing with explicit BGM track and clean Khmer voice: " + text);
+			arguments = $"-y -i \"{videoPath}\" -i \"{text}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=0.30[a_bgm_raw];[2:a]volume=1.0,alimiter=limit=0.98[a_khmer];[a_bgm_raw][a_khmer]amix=inputs=2:normalize=0:duration=first:dropout_transition=0[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
 		}
 		else
 		{
-			// Always preserve movie background sound, music, and atmosphere ducked to 22%, combined with loud Khmer dub voice at 2.8x
-			Log("BuildPreviewVideoAsync: Mixing original video background audio (ducked) with loud Khmer dub dialogue");
-			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -filter_complex \"[0:a]volume=0.22,highpass=f=100,lowpass=f=5000[a_orig_bgm];[1:a]volume=2.8,alimiter=limit=0.98[a_khmer];[a_orig_bgm][a_khmer]amix=inputs=2:normalize=0:duration=first[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			// Pure Khmer dub dialogue: Video from movie, audio 100% pure loud Khmer dub (Zero Chinese vocal bleed)
+			Log("BuildPreviewVideoAsync: Muxing original video with pure clean loud Khmer dub dialogue (0% Chinese leak)");
+			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
 		}
 		ProcessStartInfo startInfo2 = new ProcessStartInfo
 		{
