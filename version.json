@@ -1,13 +1,13 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.2.0",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.0/ToolDubber-Setup-v2.2.0.exe",
-  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.0/ToolDubber-Patch-v2.2.0.zip",
-  "patch_sha256": "16b9b20253b0a69183babd98fa3c4bc28d7a5573da61d024f32600b409cb6d18",
-  "patch_size_bytes": 1873186,
+  "latest_version": "2.2.1",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.1/ToolDubber-Setup-v2.2.1.exe",
+  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.1/ToolDubber-Patch-v2.2.1.zip",
+  "patch_sha256": "8c516f402caa803d10bcbeb2fd0fc82751cdbdbc953f142db6ca97a27fa75563",
+  "patch_size_bytes": 1874126,
   "min_patch_version": "2.0.0",
-  "release_notes": "Version 2.2.0: Improved Khmer voice synthesis reliability, automatic recovery for missing dialogue audio, natural dubbing flow, and preservation of original background audio.",
-  "sha256": "67c235bb6878299a398d0f4fa9f05b2f1b5868ab742d33c92d62cf9476e55734",
+  "release_notes": "Version 2.2.1: Fixed Export This preparation so missing Khmer voice lines are synthesized asynchronously in small batches before export. Improved reliability after translation and reduced UI blocking.",
+  "sha256": "36128186f16c24899a970f5b5198965400b47b1a675e38dc7aec119e33b4fb92",
   "mandatory": false
 }
