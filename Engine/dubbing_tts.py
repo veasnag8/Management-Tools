@@ -23,6 +23,33 @@ VOICE_MAP = {
     "female": "km-KH-SreymomNeural"
 }
 
+async def _synthesize_tier(
+    text: str,
+    output_path: str,
+    voice_name: str,
+    options: Dict[str, str],
+    tier_name: str
+) -> bool:
+    """Retry transient Edge TTS failures without accepting a partial audio file."""
+    for attempt in range(2):
+        try:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            communicate = edge_tts.Communicate(text=text, voice=voice_name, **options)
+            await communicate.save(output_path)
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
+                return True
+            raise RuntimeError("Edge TTS returned without a usable audio file")
+        except Exception as error:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            sys.stderr.write(
+                f"Edge TTS {tier_name} attempt {attempt + 1}/2 failed for {voice_name}: {error}\n"
+            )
+            if attempt == 0:
+                await asyncio.sleep(0.5)
+    return False
+
 def resolve_voice(voice_id: str) -> str:
     """Resolves UI voice identifier to verified Neural voice tag."""
     key = (voice_id or "").strip().lower()
@@ -53,46 +80,30 @@ async def _synthesize_async(
     eff_volume = "+0%" if is_female else volume
     eff_pitch = "+0Hz" if is_female else pitch
 
-    try:
-        communicate = edge_tts.Communicate(
-            text=clean_text,
-            voice=voice_name,
-            rate=rate,
-            volume=eff_volume,
-            pitch=eff_pitch
-        )
-        await communicate.save(output_path)
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
-            return True
-    except Exception as e1:
-        sys.stderr.write(f"Edge TTS tier 1 failed for {voice_name}: {e1}\n")
+    if await _synthesize_tier(
+        clean_text,
+        output_path,
+        voice_name,
+        {"rate": rate, "volume": eff_volume, "pitch": eff_pitch},
+        "configured-voice"
+    ):
+        return True
 
     # Tier 2: Try pure clean call without rate/pitch/volume
-    try:
-        communicate = edge_tts.Communicate(
-            text=clean_text,
-            voice=voice_name
-        )
-        await communicate.save(output_path)
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
-            return True
-    except Exception as e2:
-        sys.stderr.write(f"Edge TTS tier 2 failed for {voice_name}: {e2}\n")
+    if await _synthesize_tier(clean_text, output_path, voice_name, {}, "default-options"):
+        return True
 
     # Tier 3: If female voice failed on server, fallback to male voice so dialogue is NEVER missing!
     if is_female:
-        try:
-            sys.stderr.write(f"Falling back from {voice_name} to km-KH-PisethNeural\n")
-            communicate = edge_tts.Communicate(
-                text=clean_text,
-                voice="km-KH-PisethNeural",
-                rate=rate
-            )
-            await communicate.save(output_path)
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 100:
-                return True
-        except Exception as e3:
-            sys.stderr.write(f"Edge TTS tier 3 fallback failed: {e3}\n")
+        sys.stderr.write(f"Falling back from {voice_name} to km-KH-PisethNeural\n")
+        if await _synthesize_tier(
+            clean_text,
+            output_path,
+            "km-KH-PisethNeural",
+            {"rate": rate},
+            "male-voice-fallback"
+        ):
+            return True
 
     return False
 

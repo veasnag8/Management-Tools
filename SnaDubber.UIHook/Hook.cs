@@ -185,6 +185,12 @@ public static class Hook
 	private static bool _isSocialPresetHooked = false;
 	private static bool _isTranscribeTopHooked = false;
 
+	private static string GetAppVersion()
+	{
+		Version version = typeof(Hook).Assembly.GetName().Version;
+		return version == null ? "0.0.0" : $"{version.Major}.{version.Minor}.{Math.Max(0, version.Build)}";
+	}
+
 	private static bool _isEpisodeBatchHooked = false;
 	private static bool _isAutoUpdateCenterHooked = false;
 
@@ -323,7 +329,7 @@ public static class Hook
 		//IL_0084: Expected Obj, but got Unknown
 		if (window != null)
 		{
-			window.Title = "SNA-Dubber Version 2.1.6";
+			window.Title = $"SNA-Dubber Version {GetAppVersion()}";
 			Log("Attach called for Window: " + ((object)window).GetType().FullName);
 			InitializeEnvironment();
 			RegisterGlobalCaretHandlers();
@@ -366,9 +372,9 @@ public static class Hook
 	{
 		try
 		{
-			if (!string.Equals(window.Title, "SNA-Dubber Version 2.1.6", StringComparison.Ordinal))
+			if (!string.Equals(window.Title, $"SNA-Dubber Version {GetAppVersion()}", StringComparison.Ordinal))
 			{
-				window.Title = "SNA-Dubber Version 2.1.6";
+				window.Title = $"SNA-Dubber Version {GetAppVersion()}";
 			}
 			if (!_isLicenseInjected)
 			{
@@ -616,7 +622,7 @@ public static class Hook
 			{
 				client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", deviceToken);
 			}
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("SNA-Dubber/2.1.6");
+			client.DefaultRequestHeaders.UserAgent.ParseAdd($"SNA-Dubber/{GetAppVersion()}");
 
 			var payload = new
 			{
@@ -3061,7 +3067,7 @@ public static class Hook
 			try { File.Delete(markerPath); } catch { }
 
 			using var doc = System.Text.Json.JsonDocument.Parse(json);
-			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? "2.1.0") : "2.1.0";
+			string ver = doc.RootElement.TryGetProperty("version", out var vEl) ? (vEl.GetString() ?? GetAppVersion()) : GetAppVersion();
 			string notes = doc.RootElement.TryGetProperty("release_notes", out var nEl) ? (nEl.GetString() ?? "") : "";
 
 			window.Dispatcher.BeginInvoke((Action)(() =>
@@ -3080,10 +3086,7 @@ public static class Hook
 	{
 		try
 		{
-			var asmVer = typeof(Hook).Assembly.GetName().Version;
-			string currentVer = asmVer != null 
-				? (asmVer.Build >= 0 ? $"{asmVer.Major}.{asmVer.Minor}.{asmVer.Build}" : $"{asmVer.Major}.{asmVer.Minor}.0")
-				: "2.1.6";
+			string currentVer = GetAppVersion();
 			if (!string.IsNullOrEmpty(postUpdateVersion))
 			{
 				currentVer = postUpdateVersion;
@@ -3169,7 +3172,7 @@ public static class Hook
 			Grid.SetRow(headerGrid, 0);
 			root.Children.Add(headerGrid);
 
-			// Row 1: Compact Version Bar (Current: v2.1.0 -> Latest: v2.1.0   [Up to Date ✓])
+			// Row 1: Compact version and update status.
 			Border infoCard = new Border
 			{
 				Background = new SolidColorBrush(Color.FromRgb(11, 18, 34)),
@@ -3545,7 +3548,7 @@ public static class Hook
 					try
 					{
 						using var ghClient = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.6");
+						ghClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ToolDubber/{GetAppVersion()}");
 						string ghUrl = "https://raw.githubusercontent.com/veasnag8/Management-Tools/main/version.json?t=" + DateTime.UtcNow.Ticks;
 						using var ghResp = await ghClient.GetAsync(ghUrl);
 						if (ghResp.IsSuccessStatusCode)
@@ -3573,7 +3576,7 @@ public static class Hook
 						try
 						{
 							using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-							client.DefaultRequestHeaders.UserAgent.ParseAdd("ToolDubber/2.1.6");
+							client.DefaultRequestHeaders.UserAgent.ParseAdd($"ToolDubber/{GetAppVersion()}");
 							string apiUrl = $"https://license-api.veasnag8.workers.dev/v1/version?product=SNA_DUBBER&current_version={currentVer}";
 							using var resp = await client.GetAsync(apiUrl);
 							if (resp.IsSuccessStatusCode)
@@ -3840,9 +3843,7 @@ del ""%~f0""
 					string[] localCandidates = new[]
 					{
 						Path.Combine(@"D:\Project\Release_v1.2.0\Output", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe"),
-						Path.Combine(@"D:\Project\Release_v1.2.0\Output", "ToolDubber-Setup-v2.1.0.exe"),
-						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ToolDubber-Setup-v2.1.0.exe")
+						Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", $"ToolDubber-Setup-v{latestVer}.exe")
 					};
 
 					downloadDone = await downloadFileWithProgressAsync(downloadUrl, tempExePath, "📦 Downloading...");
@@ -7143,19 +7144,19 @@ del ""%~f0""
 
 	private static async Task<bool> RunDirectPythonTtsAsync(string text, string outPath, string voice, double speed, double volume, int pitch)
 	{
-		_ = 1;
+		string tempJson = null;
 		try
 		{
-			string fileName = "python";
-			string winAppsPy = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps", "python.exe");
-			if (File.Exists(winAppsPy)) fileName = winAppsPy;
-
 			string text2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Engine", "engine_main.py");
 			if (!File.Exists(text2))
 			{
 				string alt = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "Engine", "engine_main.py");
 				if (File.Exists(alt)) text2 = alt;
-				else return false;
+				else
+				{
+					Log("Direct Python TTS failed: Engine\\engine_main.py was not found.");
+					return false;
+				}
 			}
 			string contents = JsonSerializer.Serialize(new
 			{
@@ -7166,12 +7167,13 @@ del ""%~f0""
 				volume = volume,
 				pitch = pitch
 			});
-			string tempJson = Path.GetTempFileName();
+			tempJson = Path.GetTempFileName();
 			File.WriteAllText(tempJson, contents, Encoding.UTF8);
+			(string fileName, string prefixArguments) = ResolvePythonCommand();
 			ProcessStartInfo startInfo = new ProcessStartInfo
 			{
 				FileName = fileName,
-				Arguments = $"\"{text2}\" --action tts_single --payload \"{tempJson}\"",
+				Arguments = $"{prefixArguments}\"{text2}\" --action tts_single --payload \"{tempJson}\"",
 				UseShellExecute = false,
 				CreateNoWindow = true,
 				RedirectStandardError = true,
@@ -7183,20 +7185,77 @@ del ""%~f0""
 				Task<string> task2 = p.StandardError.ReadToEndAsync();
 				await Task.WhenAll<string>(task, task2);
 				await p.WaitForExitAsync();
-			}
-			try
-			{
-				File.Delete(tempJson);
-			}
-			catch
-			{
+				if (p.ExitCode != 0)
+				{
+					Log($"Direct Python TTS exited with code {p.ExitCode}: {task2.Result.Trim()}");
+					return false;
+				}
 			}
 			return File.Exists(outPath) && new FileInfo(outPath).Length > 3500;
 		}
-		catch
+		catch (Exception ex)
 		{
+			Log($"Direct Python TTS error: {ex.Message}");
 			return false;
 		}
+		finally
+		{
+			try
+			{
+				if (!string.IsNullOrEmpty(tempJson) && File.Exists(tempJson)) File.Delete(tempJson);
+			}
+			catch (Exception ex)
+			{
+				Log($"Unable to remove temporary TTS payload: {ex.Message}");
+			}
+		}
+	}
+
+	private static (string executable, string prefixArguments) ResolvePythonCommand()
+	{
+		string configuredPython = Environment.GetEnvironmentVariable("PYTHON");
+		if (!string.IsNullOrWhiteSpace(configuredPython) && File.Exists(configuredPython))
+		{
+			return (configuredPython, string.Empty);
+		}
+
+		string windowsApps = Path.GetFullPath(Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+			"Microsoft", "WindowsApps")).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+		string[] pathEntries = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+			.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+		foreach (string entry in pathEntries)
+		{
+			try
+			{
+				string fullEntry = Path.GetFullPath(entry.Trim('"'));
+				if (string.Equals(fullEntry.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), windowsApps, StringComparison.OrdinalIgnoreCase)) continue;
+				string python = Path.Combine(fullEntry, "python.exe");
+				if (File.Exists(python)) return (python, string.Empty);
+			}
+			catch (Exception ex)
+			{
+				Log($"Skipping invalid Python PATH entry '{entry}': {ex.Message}");
+			}
+		}
+
+		foreach (string entry in pathEntries)
+		{
+			try
+			{
+				string fullEntry = Path.GetFullPath(entry.Trim('"'));
+				string launcher = Path.Combine(fullEntry, "py.exe");
+				if (File.Exists(launcher)) return (launcher, "-3 ");
+			}
+			catch (Exception ex)
+			{
+				Log($"Skipping invalid Python launcher PATH entry '{entry}': {ex.Message}");
+			}
+		}
+
+		Log("No installed Python interpreter was found outside WindowsApps; trying the PATH command.");
+		return ("python", string.Empty);
 	}
 
 	public static async Task<string> BuildPreviewVideoAsync(MainViewModel vm)
