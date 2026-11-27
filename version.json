@@ -1,13 +1,13 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.1.6",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.6/ToolDubber-Setup-v2.1.6.exe",
-  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.1.6/ToolDubber-Patch-v2.1.6.zip",
-  "patch_sha256": "a12961a8cabab53e6689cfee00b7894233b96f36f5047effd85666c30ba04a91",
-  "patch_size_bytes": 1791478,
+  "latest_version": "2.2.0",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.0/ToolDubber-Setup-v2.2.0.exe",
+  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.0/ToolDubber-Patch-v2.2.0.zip",
+  "patch_sha256": "16b9b20253b0a69183babd98fa3c4bc28d7a5573da61d024f32600b409cb6d18",
+  "patch_size_bytes": 1873186,
   "min_patch_version": "2.0.0",
-  "release_notes": "កំណែថ្មី Version 2.1.6 រួមមាន:\n1. 👩‍🦰 Fix Female Voice (ជួសជុលសំឡេងស្រី Sreymom ដំណើរការ 100%): កែសម្រួល Edge-TTS SSML ដោយដកចេញប៉ារ៉ាម៉ែត្រដែលបណ្តាលឱ្យ Server បដិសេធ (NoAudioReceived) ធ្វើឱ្យសំឡេងស្រីដំណើរការពិរោះ រលូន និងច្បាស់ 100%\n2. 🎙️ Auto Recovery for Missing Voices (ជួសជុលសំឡេងដែលបាត់ / ខ្លះលឺខ្លះអត់): ប្រព័ន្ធពិនិត្យរកឃើញរាល់ File សំឡេងណាដែលស្ងាត់ ឬខូច (< 3500 bytes) ហើយ Generate បង្កើតជាសំឡេងនិយាយពិតប្រាកដឡើងវិញដោយស្វ័យប្រវត្តិ ធានាមិនបាត់សំឡេងបន្ទាត់ណាឡើយ\n3. 🎬 Natural Cinema Dubbing & Story Flow: បកប្រែភាសានិយាយកុនរលូន ស៊ីសង្វាក់គ្នាតាមសាច់រឿង និងហេតុការណ៍ មិនកាត់ចុងប្រយោគ\n4. 🎵 Movie Background Audio Preservation: រក្សាភ្លេង និង Sound Effects របស់រឿងដើម (Sidechain ducking) មិនស្ងាត់ជ្រៀប",
-  "sha256": "03af5af028cb1db79d846ec3d19b9ae1caf8f4a8559c5469863eb38d7cb3878f",
+  "release_notes": "Version 2.2.0: Improved Khmer voice synthesis reliability, automatic recovery for missing dialogue audio, natural dubbing flow, and preservation of original background audio.",
+  "sha256": "67c235bb6878299a398d0f4fa9f05b2f1b5868ab742d33c92d62cf9476e55734",
   "mandatory": false
 }
