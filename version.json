@@ -1,13 +1,13 @@
 {
   "product": "SNA_DUBBER",
   "has_update": true,
-  "latest_version": "2.2.1",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.1/ToolDubber-Setup-v2.2.1.exe",
-  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.1/ToolDubber-Patch-v2.2.1.zip",
-  "patch_sha256": "8c516f402caa803d10bcbeb2fd0fc82751cdbdbc953f142db6ca97a27fa75563",
-  "patch_size_bytes": 1874126,
+  "latest_version": "2.2.2",
+  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.2/ToolDubber-Setup-v2.2.2.exe",
+  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.2/ToolDubber-Patch-v2.2.2.zip",
+  "patch_sha256": "fccd9dead7af9986a53df8ed267f8ee29001ea134bf00bea1623bf21adfaacd8",
+  "patch_size_bytes": 1874833,
   "min_patch_version": "2.0.0",
-  "release_notes": "Version 2.2.1: Fixed Export This preparation so missing Khmer voice lines are synthesized asynchronously in small batches before export. Improved reliability after translation and reduced UI blocking.",
-  "sha256": "36128186f16c24899a970f5b5198965400b47b1a675e38dc7aec119e33b4fb92",
+  "release_notes": "Version 2.2.2: Reduces Gemini token use while preserving story context. Requires a complete translation for every dialogue line; stops before voice generation/export if dialogue remains untranslated.",
+  "sha256": "b81de8ad2040cad60cd2e9eb042b8333cbf1fb548b1d2fe2cd5cc971ce6dacb0",
   "mandatory": false
 }
