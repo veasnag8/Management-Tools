@@ -13006,12 +13006,18 @@ del ""%~f0""
 
 	private static void AttachTextLayerElements(Window window, MainViewModel vm)
 	{
+		if (_isAttachingTextLayerElements) return;
+		_isAttachingTextLayerElements = true;
 		try
 		{
 			Canvas previewCanvas = FindVisualChild((DependencyObject)(object)window, (Canvas canvas) => canvas.Name == "OverlayCanvas");
 			foreach (Border element in FindAllVisualChildren<Border>((DependencyObject)(object)window))
 			{
 				if (element.DataContext is not TextLayerItem layer) continue;
+				// Text resize handles and nested template borders inherit the layer's
+				// DataContext. Only attach the actual item root; otherwise each timer
+				// pass wraps the handle again until WPF overflows its layout stack.
+				if (element.Tag as string == "TextResizeHandle" || HasLinkedTextLayerAncestor(element, layer)) continue;
 				if (previewCanvas != null && IsVisualDescendantOf(element, previewCanvas))
 					AttachPreviewTextElement(element, previewCanvas, layer, vm);
 				else
@@ -13024,6 +13030,22 @@ del ""%~f0""
 			}
 		}
 		catch (Exception ex) { Log("AttachTextLayerElements error: " + ex.Message); }
+		finally { _isAttachingTextLayerElements = false; }
+	}
+
+	private static bool _isAttachingTextLayerElements;
+
+	private static bool HasLinkedTextLayerAncestor(DependencyObject element, TextLayerItem layer)
+	{
+		for (DependencyObject current = VisualTreeHelper.GetParent(element); current != null;)
+		{
+			if (current is Border parent && ReferenceEquals(parent.DataContext, layer) &&
+				(parent.Tag as string == "LinkedPreviewText" || parent.Tag as string == "LinkedTimelineText"))
+				return true;
+			try { current = VisualTreeHelper.GetParent(current); }
+			catch { return false; }
+		}
+		return false;
 	}
 
 	private static bool IsVisualDescendantOf(DependencyObject child, DependencyObject ancestor)
@@ -13059,11 +13081,11 @@ del ""%~f0""
 
 	private static void AttachPreviewTextElement(Border element, Canvas canvas, TextLayerItem layer, MainViewModel vm)
 	{
+		if (element.Tag as string == "LinkedPreviewText") return;
+		element.Tag = "LinkedPreviewText";
 		ApplyTextLayerVisualStyle(element, layer);
 		Border existingHandle = FindVisualChild((DependencyObject)(object)element, (Border item) => item.Tag as string == "TextResizeHandle");
 		if (existingHandle != null) existingHandle.Visibility = ReferenceEquals(vm.SelectedTextLayer, layer) ? Visibility.Visible : Visibility.Collapsed;
-		if (element.Tag as string == "LinkedPreviewText") return;
-		element.Tag = "LinkedPreviewText";
 		element.Cursor = Cursors.SizeAll;
 		UIElement originalChild = element.Child;
 		Grid editorRoot = new Grid { Background = Brushes.Transparent };

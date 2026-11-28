@@ -53,8 +53,10 @@ def get_or_create_release(tag: str, version: str, headers: dict) -> dict:
             "target_commitish": "main",
             "name": f"Tool Dubber v{version}",
             "body": (
-                "Fixes no-overlap status button styling: dark when idle and red "
-                "when overlaps are found. Also fixes Srey Mom voice changes by "
+                "Fixes an unexpected app close during translation caused by "
+                "text-layer UI elements being repeatedly attached until a layout "
+                "stack overflow. Also fixes no-overlap status button styling, "
+                "Srey Mom voice changes by "
                 "regenerating cached audio with the selected voice; highlights "
                 "and navigates overlapping dialogue; allows start/end time "
                 "editing; and removes Gemini Keys buttons. Includes the full "
