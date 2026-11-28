@@ -77,7 +77,8 @@ try {
 
     & dotnet build $projectFile --configuration Release `
         "-p:SnaDubberAssemblyPath=$(Join-Path $AppSourceDir 'SnaDubber.dll')" `
-        "-p:CommunityToolkitAssemblyPath=$(Join-Path $AppSourceDir 'CommunityToolkit.Mvvm.dll')"
+        "-p:CommunityToolkitAssemblyPath=$(Join-Path $AppSourceDir 'CommunityToolkit.Mvvm.dll')" `
+        "-p:SystemManagementAssemblyPath=$(Join-Path $AppSourceDir 'System.Management.dll')"
     if ($LASTEXITCODE -ne 0) {
         throw "UIHook build failed with code $LASTEXITCODE"
     }
@@ -123,7 +124,7 @@ try {
     $manifest.patch_sha256 = $patchHash
     $manifest.patch_size_bytes = $patchSize
     $manifest.sha256 = $installerHash
-    $manifest.release_notes = "Version ${appVersion}: Fixes an unexpected app close during translation caused by text-layer UI elements being repeatedly attached until a layout stack overflow. Also fixes the no-overlap status button styling, Srey Mom voice changes, overlap highlighting and navigation, start/end time editing, and removes Gemini Keys buttons."
+    $manifest.release_notes = "Version ${appVersion}: Cancelling video export with X now stops its FFmpeg process, waits for it to exit, and deletes the incomplete output so a later export starts cleanly. Also fixes text-layer layout stack overflow that could close the app during translation, Srey Mom voice changes, overlap highlighting and navigation, start/end time editing, and removes Gemini Keys buttons."
     $manifestJson = $manifest | ConvertTo-Json -Depth 10
     [System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.UTF8Encoding]::new($false))
 

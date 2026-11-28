@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Management;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -244,6 +245,10 @@ public static class Hook
 	private static readonly List<OverlayItem> _temporaryExportOverlays = new();
 	private static readonly List<BlurRegionItem> _stashedBlurRegions = new();
 	private static DateTime _exportStartedAt;
+	private static volatile bool _exportCancellationRequested;
+	private static readonly object _cancelledExportOutputLock = new object();
+	private static readonly HashSet<string> _cancelledExportOutputPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+	private static Task _exportCancellationTask = Task.CompletedTask;
 
 	private static DialogueLine _lastFollowedLine = null;
 
@@ -2159,6 +2164,8 @@ public static class Hook
 				if (export.IsRunning)
 				{
 					wasRunning = true;
+					_exportCancellationRequested = false;
+					await CleanupCancelledExportOutputsAsync(vm);
 					PreExportSync(vm, window);
 					if (_isVideoFlipped)
 					{
@@ -2196,6 +2203,8 @@ public static class Hook
 				else if (wasRunning)
 				{
 					wasRunning = false;
+					await _exportCancellationTask;
+					await CleanupCancelledExportOutputsAsync(vm);
 					if (!vm.IsExporting)
 					{
 						RemoveTemporaryExportOverlays(vm);
@@ -2208,7 +2217,7 @@ public static class Hook
 							vm.CurrentProject.VideoPath = _originalVideoSourcePath;
 					}
 					_exportProgressTimer?.Stop();
-					bool succeeded = string.Equals(vm.ExportStatusText, "Export Complete!", StringComparison.OrdinalIgnoreCase);
+					bool succeeded = !_exportCancellationRequested && string.Equals(vm.ExportStatusText, "Export Complete!", StringComparison.OrdinalIgnoreCase);
 					if (succeeded)
 					{
 						vm.BusyProgressPercent = 100.0;
@@ -2237,6 +2246,146 @@ public static class Hook
 		{
 			Log("WireExportLoading error: " + ex.Message);
 		}
+	}
+
+	private static void RequestExportCancellation(MainViewModel vm)
+	{
+		if (_exportCancellationRequested) return;
+		_exportCancellationRequested = true;
+		vm.BusyStatusText = "Cancelling export and removing the incomplete video...";
+		vm.ProjectStatusMessage = "Cancelling export...";
+		_exportCancellationTask = CancelExportProcessesUntilStoppedAsync(vm);
+		Log("Export cancellation requested by the close button.");
+	}
+
+	private static async Task CancelExportProcessesUntilStoppedAsync(MainViewModel vm)
+	{
+		try
+		{
+			IAsyncRelayCommand export = vm?.ExportThisCommand;
+			await Task.Run(KillActiveExportFfmpegProcesses);
+			while (export?.IsRunning == true)
+			{
+				await Task.Delay(250);
+				if (export.IsRunning) await Task.Run(KillActiveExportFfmpegProcesses);
+			}
+		}
+		catch (Exception ex) { Log("CancelExportProcessesUntilStoppedAsync error: " + ex.Message); }
+		finally
+		{
+			await CleanupCancelledExportOutputsAsync(vm);
+		}
+	}
+
+	private static void KillActiveExportFfmpegProcesses()
+	{
+		try
+		{
+			int rootPid = Environment.ProcessId;
+			Dictionary<int, (int ParentId, string Name, string CommandLine)> processes = new Dictionary<int, (int, string, string)>();
+			using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT ProcessId, ParentProcessId, Name, CommandLine FROM Win32_Process"))
+			using (ManagementObjectCollection rows = searcher.Get())
+			{
+				foreach (ManagementObject row in rows)
+				{
+					using (row)
+					{
+						int pid = Convert.ToInt32(row["ProcessId"], CultureInfo.InvariantCulture);
+						int parentId = Convert.ToInt32(row["ParentProcessId"], CultureInfo.InvariantCulture);
+						processes[pid] = (parentId, Convert.ToString(row["Name"], CultureInfo.InvariantCulture) ?? string.Empty,
+							Convert.ToString(row["CommandLine"], CultureInfo.InvariantCulture) ?? string.Empty);
+					}
+				}
+			}
+
+			HashSet<int> descendants = new HashSet<int> { rootPid };
+			bool added;
+			do
+			{
+				added = false;
+				foreach (KeyValuePair<int, (int ParentId, string Name, string CommandLine)> entry in processes)
+					if (!descendants.Contains(entry.Key) && descendants.Contains(entry.Value.ParentId))
+						added |= descendants.Add(entry.Key);
+			} while (added);
+
+			foreach (KeyValuePair<int, (int ParentId, string Name, string CommandLine)> entry in processes)
+			{
+				if (!descendants.Contains(entry.Key) || !entry.Value.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase)) continue;
+				TrackExportOutputFromFfmpegCommandLine(entry.Value.CommandLine);
+				try
+				{
+					using Process process = Process.GetProcessById(entry.Key);
+					if (!process.HasExited)
+					{
+						process.Kill(entireProcessTree: true);
+						process.WaitForExit(5000);
+						Log($"Stopped export FFmpeg process {entry.Key}.");
+					}
+				}
+				catch (Exception ex) { Log($"Unable to stop export FFmpeg process {entry.Key}: {ex.Message}"); }
+			}
+		}
+		catch (Exception ex) { Log("KillActiveExportFfmpegProcesses error: " + ex.Message); }
+	}
+
+	private static void TrackExportOutputFromFfmpegCommandLine(string commandLine)
+	{
+		if (string.IsNullOrWhiteSpace(commandLine)) return;
+		List<string> args = new List<string>();
+		StringBuilder token = new StringBuilder();
+		bool quoted = false;
+		foreach (char c in commandLine)
+		{
+			if (c == '"') { quoted = !quoted; continue; }
+			if (char.IsWhiteSpace(c) && !quoted)
+			{
+				if (token.Length > 0) { args.Add(token.ToString()); token.Clear(); }
+			}
+			else token.Append(c);
+		}
+		if (token.Length > 0) args.Add(token.ToString());
+		string sourcePath = null;
+		try { sourcePath = Path.GetFullPath(Application.Current?.MainWindow?.DataContext is MainViewModel vm ? vm.CurrentProject?.VideoPath : null); } catch { }
+		string outputPath = args.LastOrDefault(arg => new[] { ".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".wmv" }
+			.Contains(Path.GetExtension(arg), StringComparer.OrdinalIgnoreCase));
+		if (string.IsNullOrWhiteSpace(outputPath)) return;
+		try
+		{
+			outputPath = Path.GetFullPath(outputPath);
+			if (!string.Equals(outputPath, sourcePath, StringComparison.OrdinalIgnoreCase))
+				lock (_cancelledExportOutputLock) _cancelledExportOutputPaths.Add(outputPath);
+		}
+		catch (Exception ex) { Log("Could not identify incomplete export output: " + ex.Message); }
+	}
+
+	private static async Task CleanupCancelledExportOutputsAsync(MainViewModel vm)
+	{
+		string[] paths;
+		lock (_cancelledExportOutputLock)
+		{
+			paths = _cancelledExportOutputPaths.ToArray();
+			_cancelledExportOutputPaths.Clear();
+		}
+		string sourcePath = null;
+		try { sourcePath = Path.GetFullPath(vm?.CurrentProject?.VideoPath); } catch { }
+		foreach (string path in paths)
+		{
+			try
+			{
+				if (string.Equals(Path.GetFullPath(path), sourcePath, StringComparison.OrdinalIgnoreCase)) continue;
+				if (File.Exists(path))
+				{
+					File.Delete(path);
+					Log("Deleted incomplete export video: " + path);
+				}
+			}
+			catch (Exception ex)
+			{
+				lock (_cancelledExportOutputLock) _cancelledExportOutputPaths.Add(path);
+				Log("Unable to delete incomplete export video " + path + ": " + ex.Message);
+			}
+		}
+		await Task.CompletedTask;
 	}
 
 	private static void InjectTextLayersForExport(MainViewModel vm, Window window = null)
@@ -11556,6 +11705,11 @@ del ""%~f0""
 			};
 			closeBtn.Click += (object s, RoutedEventArgs e) =>
 			{
+				if (vm != null && (vm.ExportThisCommand?.IsRunning == true || vm.IsExporting))
+				{
+					RequestExportCancellation(vm);
+					return;
+				}
 				_cancelRequested = true;
 				if (vm != null)
 				{

@@ -53,9 +53,11 @@ def get_or_create_release(tag: str, version: str, headers: dict) -> dict:
             "target_commitish": "main",
             "name": f"Tool Dubber v{version}",
             "body": (
-                "Fixes an unexpected app close during translation caused by "
-                "text-layer UI elements being repeatedly attached until a layout "
-                "stack overflow. Also fixes no-overlap status button styling, "
+                "Cancelling video export with X now stops its FFmpeg process, "
+                "waits for it to exit, and deletes the incomplete output so a "
+                "later export starts cleanly. Also fixes text-layer layout stack "
+                "overflow that could close the app during translation and fixes "
+                "no-overlap status button styling, "
                 "Srey Mom voice changes by "
                 "regenerating cached audio with the selected voice; highlights "
                 "and navigates overlapping dialogue; allows start/end time "

@@ -5,9 +5,9 @@
     <UseWPF>true</UseWPF>
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>2.2.10</Version>
-    <AssemblyVersion>2.2.10.0</AssemblyVersion>
-    <FileVersion>2.2.10.0</FileVersion>
+    <Version>2.2.11</Version>
+    <AssemblyVersion>2.2.11.0</AssemblyVersion>
+    <FileVersion>2.2.11.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +21,12 @@
       <HintPath Condition="'$(CommunityToolkitAssemblyPath)' != ''">$(CommunityToolkitAssemblyPath)</HintPath>
       <HintPath Condition="'$(CommunityToolkitAssemblyPath)' == '' and Exists('..\..\SNA-Dubber\CommunityToolkit.Mvvm.dll')">..\..\SNA-Dubber\CommunityToolkit.Mvvm.dll</HintPath>
       <HintPath Condition="'$(CommunityToolkitAssemblyPath)' == '' and !Exists('..\..\SNA-Dubber\CommunityToolkit.Mvvm.dll')">$(LOCALAPPDATA)\Programs\Tool Dubber\CommunityToolkit.Mvvm.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Management">
+      <HintPath Condition="'$(SystemManagementAssemblyPath)' != ''">$(SystemManagementAssemblyPath)</HintPath>
+      <HintPath Condition="'$(SystemManagementAssemblyPath)' == '' and Exists('..\..\SNA-Dubber\System.Management.dll')">..\..\SNA-Dubber\System.Management.dll</HintPath>
+      <HintPath Condition="'$(SystemManagementAssemblyPath)' == '' and !Exists('..\..\SNA-Dubber\System.Management.dll')">$(LOCALAPPDATA)\Programs\Tool Dubber\System.Management.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
