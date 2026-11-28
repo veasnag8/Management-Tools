@@ -1,13 +1,13 @@
 {
     "product":  "SNA_DUBBER",
     "has_update":  true,
-    "latest_version":  "2.2.8",
-    "download_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.8/ToolDubber-Setup-v2.2.8.exe",
-    "patch_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.8/ToolDubber-Patch-v2.2.8.zip",
-    "patch_sha256":  "338ad6d971581fcd6d465ead9257769bba92302f09f9ccbb63d688ac94a8975a",
-    "patch_size_bytes":  1803749,
+    "latest_version":  "2.2.9",
+    "download_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.9/ToolDubber-Setup-v2.2.9.exe",
+    "patch_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.9/ToolDubber-Patch-v2.2.9.zip",
+    "patch_sha256":  "3065fc7347858f1e4a49888418e4089bea2d7d83c62c214447227deecc98cae9",
+    "patch_size_bytes":  1803855,
     "min_patch_version":  "2.0.0",
-    "release_notes":  "Version 2.2.8: Fixes Srey Mom voice changes by regenerating cached dialogue audio with the selected voice, preserves the chosen voice instead of silently switching to Piset, and reports synthesis failures. Also highlights and navigates overlapping dialogue, allows start/end time editing, removes Gemini Keys buttons, and includes processing-time and translation improvements.",
-    "sha256":  "d90fe18cbfaac58b7559130ba2cf14c0ca8b590435e43a303b622be9c4d8dae6",
+    "release_notes":  "Version 2.2.9: Fixes the no-overlap status button styling; it stays dark when idle and turns red when overlaps are found. Also fixes Srey Mom voice changes by regenerating cached audio with the selected voice, highlights and navigates overlapping dialogue, allows start/end time editing, and removes Gemini Keys buttons.",
+    "sha256":  "09e9e9689e3142d354025e3c1f3232df5f3c12e57fb0424d6c0ee9f3c0ff9fd1",
     "mandatory":  false
 }
