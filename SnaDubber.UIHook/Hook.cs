@@ -155,6 +155,16 @@ public static class Hook
 
 	private static INotifyCollectionChanged _voiceSpeedLines = null;
 
+	private static MainViewModel _voiceProfileViewModel = null;
+
+	private static INotifyCollectionChanged _voiceProfileLines = null;
+
+	private static readonly HashSet<DialogueLine> _voiceProfileWatchedLines = new();
+
+	private static readonly HashSet<ComboBox> _voiceProfileComboBoxes = new();
+
+	private static readonly SemaphoreSlim _voiceSelectionSynthesisLock = new(1, 1);
+
 	private static bool _isVoiceSpeedControlHooked = false;
 
 	private static MainViewModel _dialogueFontViewModel = null;
@@ -6070,6 +6080,7 @@ del ""%~f0""
 
 	private static void WireVoiceSpeedToDialogue(MainViewModel vm)
 	{
+		WireVoiceProfileToDialogue(vm);
 		if (ReferenceEquals(_voiceSpeedViewModel, vm))
 		{
 			return;
@@ -6156,6 +6167,94 @@ del ""%~f0""
 			}
 		}
 		Log($"Applied voice speed {speed:0.00}x to {vm.DialogueLines.Count} dialogue lines");
+	}
+
+	private static void WireVoiceProfileToDialogue(MainViewModel vm)
+	{
+		if (vm == null) return;
+		if (ReferenceEquals(_voiceProfileViewModel, vm))
+		{
+			WatchVoiceProfileCollection(vm);
+			if (vm.DialogueLines != null)
+				foreach (DialogueLine line in vm.DialogueLines) WatchVoiceProfileLine(line);
+			return;
+		}
+		else
+		{
+			_voiceProfileViewModel = vm;
+			_voiceProfileLines = null;
+			_voiceProfileWatchedLines.Clear();
+		}
+
+		WatchVoiceProfileCollection(vm);
+		if (vm.DialogueLines != null)
+		{
+			foreach (DialogueLine line in vm.DialogueLines) WatchVoiceProfileLine(line);
+		}
+		vm.PropertyChanged += (sender, args) =>
+		{
+			if (args.PropertyName == nameof(vm.DialogueLines))
+			{
+				WatchVoiceProfileCollection(vm);
+				if (vm.DialogueLines != null)
+					foreach (DialogueLine line in vm.DialogueLines) WatchVoiceProfileLine(line);
+			}
+		};
+	}
+
+	private static void WatchVoiceProfileCollection(MainViewModel vm)
+	{
+		if (vm?.DialogueLines is not INotifyCollectionChanged collection || ReferenceEquals(_voiceProfileLines, collection)) return;
+		_voiceProfileLines = collection;
+		collection.CollectionChanged += (sender, args) =>
+		{
+			if (args.NewItems == null) return;
+			foreach (object item in args.NewItems)
+				if (item is DialogueLine line) WatchVoiceProfileLine(line);
+		};
+	}
+
+	private static void WatchVoiceProfileLine(DialogueLine line)
+	{
+		if (line is not INotifyPropertyChanged changedLine || !_voiceProfileWatchedLines.Add(line)) return;
+		changedLine.PropertyChanged += (sender, args) =>
+		{
+			if (args.PropertyName == nameof(line.VoiceProfile))
+			{
+				InvalidateDialogueVoiceCache(line);
+			}
+			else if (args.PropertyName == nameof(line.Speaker) && TryGetVoiceProfileChoice(line.Speaker, out string selectedVoice))
+			{
+				if (!string.Equals(line.VoiceProfile, selectedVoice, StringComparison.OrdinalIgnoreCase))
+					line.VoiceProfile = selectedVoice;
+				else
+					InvalidateDialogueVoiceCache(line);
+			}
+		};
+	}
+
+	private static bool TryGetVoiceProfileChoice(string value, out string voice)
+	{
+		string normalized = (value ?? string.Empty).Trim().ToLowerInvariant().Replace(" ", string.Empty).Replace("_", string.Empty);
+		if (normalized.Contains("sreymom") || normalized.Contains("female"))
+		{
+			voice = "sreymom";
+			return true;
+		}
+		if (normalized.Contains("piset") || normalized.Contains("piseth") || normalized.Contains("male"))
+		{
+			voice = "piset";
+			return true;
+		}
+		voice = null;
+		return false;
+	}
+
+	private static void InvalidateDialogueVoiceCache(DialogueLine line)
+	{
+		if (line == null) return;
+		line.LastSynthesizedText = "__VOICE_PROFILE_CHANGED__";
+		Log($"Dialogue line {line.Index} voice selection changed to {ResolveDialogueVoice(line)}; cached audio will be regenerated.");
 	}
 
 	public static void TryAttachExistingPreviewVideo(Window window)
@@ -7255,12 +7354,12 @@ del ""%~f0""
 		}
 		try
 		{
-			string text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "AudioCache", vm.CurrentProject.Id);
-			if (!Directory.Exists(text))
+			string cacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "AudioCache", vm.CurrentProject.Id);
+			if (!Directory.Exists(cacheDirectory))
 			{
-				Directory.CreateDirectory(text);
+				Directory.CreateDirectory(cacheDirectory);
 			}
-			string outPath = Path.Combine(text, $"line_{l.Index}.mp3");
+			string outPath = Path.Combine(cacheDirectory, $"line_{l.Index}.mp3");
 			string text2 = ((!string.IsNullOrWhiteSpace(l.CorrectedKhmer)) ? l.CorrectedKhmer : l.DraftKhmer);
 			if (string.IsNullOrWhiteSpace(text2))
 			{
@@ -7273,9 +7372,12 @@ del ""%~f0""
 				l.LastSynthesizedText = "__EMPTY_TEXT__";
 				return false;
 			}
-			try { File.Delete(outPath + ".natural.mp3"); } catch { }
 			string voice = ResolveDialogueVoice(l);
 			l.VoiceProfile = voice;
+			string voiceFileSuffix = voice.IndexOf("sreymom", StringComparison.OrdinalIgnoreCase) >= 0 ? "sreymom" : "piset";
+			outPath = Path.Combine(cacheDirectory, $"line_{l.Index}_{voiceFileSuffix}.mp3");
+			try { File.Delete(outPath + ".natural.mp3"); } catch { }
+			Log($"Synthesizing dialogue line {l.Index} with requested voice {voice}.");
 			// VoiceSpeed is a speech/TTS setting. Apply it to the generated voice;
 			// the preview video is always stream-copied at its original speed.
 			double speed = NormalizeVoiceSpeed(vm.VoiceSpeed);
@@ -7308,9 +7410,9 @@ del ""%~f0""
 			}
 			else
 			{
-				GenerateSilentAudioDirect(outPath, 0.4);
-				l.AudioFilePath = outPath;
 				l.LastSynthesizedText = "__SYNTHESIS_FAILED__";
+				try { if (File.Exists(outPath)) File.Delete(outPath); } catch { }
+				Log($"Voice synthesis failed for line {l.Index} using {voice}; kept the previously selected audio path unchanged.");
 				return false;
 			}
 		}
@@ -11901,9 +12003,64 @@ del ""%~f0""
 		foreach (DialogueLine line in vm.DialogueLines)
 		{
 			if (_dialogueItemsControl.ItemContainerGenerator.ContainerFromItem(line) is not FrameworkElement container) continue;
+			WireDialogueVoiceSelector(container, vm);
 			EnsureDialogueTimeEditor(window, vm, container, line, isStart: true);
 			EnsureDialogueTimeEditor(window, vm, container, line, isStart: false);
 		}
+	}
+
+	private static void WireDialogueVoiceSelector(FrameworkElement container, MainViewModel vm)
+	{
+		foreach (ComboBox selector in FindAllVisualChildren<ComboBox>((DependencyObject)container))
+		{
+			string currentChoice = GetComboBoxChoiceText(selector);
+			if (!TryGetVoiceProfileChoice(currentChoice, out _) || !_voiceProfileComboBoxes.Add(selector)) continue;
+			selector.SelectionChanged += (sender, args) =>
+			{
+				if (sender is not ComboBox changedSelector) return;
+				string choice = GetComboBoxChoiceText(changedSelector);
+				if (!TryGetVoiceProfileChoice(choice, out string selectedVoice)) return;
+				changedSelector.Dispatcher.BeginInvoke((Action)(async () =>
+				{
+					if (changedSelector.DataContext is not DialogueLine line) return;
+					if (!string.Equals(line.VoiceProfile, selectedVoice, StringComparison.OrdinalIgnoreCase))
+						line.VoiceProfile = selectedVoice;
+					else
+						InvalidateDialogueVoiceCache(line);
+					if (vm.IsBusy) return;
+
+					await _voiceSelectionSynthesisLock.WaitAsync();
+					try
+					{
+						vm.ProjectStatusMessage = $"Generating {selectedVoice} voice for line #{line.Index}...";
+						bool succeeded = await SynthesizeSingleLineSafelyAsync(vm, line);
+						if (succeeded)
+						{
+							try { await vm.SaveProjectAsync(); } catch { }
+							vm.ProjectStatusMessage = $"{(selectedVoice == "sreymom" ? "Srey Mom" : "Piset")} voice ready for line #{line.Index}. Click Preview Video Ready to rebuild the preview.";
+						}
+						else
+						{
+							vm.ProjectStatusMessage = $"{(selectedVoice == "sreymom" ? "Srey Mom" : "Piset")} could not generate for line #{line.Index}. Check the connection and try again.";
+						}
+					}
+					catch (Exception ex)
+					{
+						Log($"Voice selector synthesis error for line #{line.Index}: {ex.Message}");
+					}
+					finally
+					{
+						_voiceSelectionSynthesisLock.Release();
+					}
+				}), DispatcherPriority.Background);
+			};
+		}
+	}
+
+	private static string GetComboBoxChoiceText(ComboBox comboBox)
+	{
+		if (comboBox?.SelectedItem is ComboBoxItem item) return item.Content?.ToString() ?? string.Empty;
+		return comboBox?.SelectedItem?.ToString() ?? comboBox?.Text ?? string.Empty;
 	}
 
 	private static void EnsureDialogueTimeEditor(Window window, MainViewModel vm, FrameworkElement container, DialogueLine line, bool isStart)

@@ -100,19 +100,6 @@ async def _synthesize_async(
     if await _synthesize_tier(clean_text, output_path, voice_name, {}, "default-options", errors):
         return True, ""
 
-    # Tier 3: If female voice failed on server, fallback to male voice so dialogue is NEVER missing!
-    if is_female:
-        sys.stderr.write(f"Falling back from {voice_name} to km-KH-PisethNeural\n")
-        if await _synthesize_tier(
-            clean_text,
-            output_path,
-            "km-KH-PisethNeural",
-            {"rate": rate},
-            "male-voice-fallback",
-            errors
-        ):
-            return True, ""
-
     last_error = errors[-1] if errors else "No error details were returned"
     return False, f"All Edge TTS attempts failed for {voice_name}. Last error: {last_error}"
 
