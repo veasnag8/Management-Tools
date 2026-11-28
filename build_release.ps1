@@ -123,7 +123,7 @@ try {
     $manifest.patch_sha256 = $patchHash
     $manifest.patch_size_bytes = $patchSize
     $manifest.sha256 = $installerHash
-    $manifest.release_notes = "Version ${appVersion}: Retries transient Khmer voice synthesis failures and reports the built application version consistently."
+    $manifest.release_notes = "Version ${appVersion}: Highlights overlapping dialogue lines in red, allows direct start/end time editing, and adds a Next overlap button to jump to each line for editing; removes the warning as soon as timings no longer overlap. Removes the Gemini Keys buttons. Also adds elapsed processing time and improves translation and Khmer voice generation."
     $manifestJson = $manifest | ConvertTo-Json -Depth 10
     [System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.UTF8Encoding]::new($false))
 

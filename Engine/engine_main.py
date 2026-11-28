@@ -8,6 +8,7 @@ import sys
 import json
 import argparse
 import subprocess
+from importlib.metadata import version as package_version
 
 if sys.platform.startswith("win"):
     try:
@@ -48,19 +49,35 @@ def check_environment() -> dict:
         genai_ok = False
 
     edge_tts_ok = False
+    edge_tts_version = "Not installed"
+    edge_tts_compatible = False
     try:
         import edge_tts
         edge_tts_ok = True
+        edge_tts_version = package_version("edge-tts")
+        version_parts = tuple(int(part) for part in edge_tts_version.split(".")[:3])
+        edge_tts_compatible = version_parts >= (7, 3, 1)
     except Exception:
         edge_tts_ok = False
 
+    sec_ms_gec_version = "Unknown"
+    if edge_tts_ok:
+        try:
+            from edge_tts.constants import SEC_MS_GEC_VERSION
+            sec_ms_gec_version = SEC_MS_GEC_VERSION
+        except Exception:
+            pass
+
     return {
-        "status": "ready" if (ffmpeg_ok and edge_tts_ok) else "degraded",
+        "status": "ready" if (ffmpeg_ok and edge_tts_compatible) else "degraded",
         "python_version": sys.version,
         "ffmpeg_available": ffmpeg_ok,
         "ffmpeg_version": ffmpeg_ver,
         "google_genai_available": genai_ok,
         "edge_tts_available": edge_tts_ok,
+        "edge_tts_version": edge_tts_version,
+        "edge_tts_compatible": edge_tts_compatible,
+        "sec_ms_gec_version": sec_ms_gec_version,
         "voices": ["km-KH-PisethNeural", "km-KH-SreymomNeural"]
     }
 

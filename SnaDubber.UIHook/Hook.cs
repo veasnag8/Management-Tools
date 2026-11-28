@@ -180,6 +180,23 @@ public static class Hook
 	private static DispatcherTimer _previewAudioSyncTimer = null;
 	private static bool _isPreviewAudioSyncHooked = false;
 
+	private static bool IsPreviewVideoAudioCurrent(MainViewModel vm, string previewPath)
+	{
+		try
+		{
+			if (vm?.DialogueLines == null || string.IsNullOrWhiteSpace(previewPath) || !File.Exists(previewPath)) return false;
+			DateTime newestAudioUtc = DateTime.MinValue;
+			foreach (DialogueLine line in vm.DialogueLines)
+			{
+				if (string.IsNullOrWhiteSpace(line.AudioFilePath) || !File.Exists(line.AudioFilePath)) continue;
+				DateTime audioUtc = File.GetLastWriteTimeUtc(line.AudioFilePath);
+				if (audioUtc > newestAudioUtc) newestAudioUtc = audioUtc;
+			}
+			return newestAudioUtc == DateTime.MinValue || newestAudioUtc <= File.GetLastWriteTimeUtc(previewPath).AddSeconds(1);
+		}
+		catch { return false; }
+	}
+
 	private static int _voiceSpeedPreviewVersion = 0;
 	private static bool _isExportLoadingHooked = false;
 	private static bool _isSocialPresetHooked = false;
@@ -223,6 +240,14 @@ public static class Hook
 	private static ScrollViewer _dialogueScrollViewer = null;
 
 	private static ItemsControl _dialogueItemsControl = null;
+
+	private static DispatcherTimer _overlapHighlightTimer = null;
+
+	private static readonly Dictionary<Border, (Brush Background, Brush BorderBrush, Thickness BorderThickness)> _overlapBorderBackups = new();
+
+	private static int _lastOverlapFocusIndex = -1;
+
+	private static Button _btnNextOverlapRef = null;
 
 	private static Border _lastHighlightedBorder = null;
 
@@ -291,12 +316,18 @@ public static class Hook
 	private static bool _classHandlersRegistered = false;
 
 	private static bool _isPipelineRunning = false;
+	private static int _lastDialogueAudioEndMs = 0;
 
 	private static bool _transcriptionCommandRunning = false;
 
 	private static bool _normalizingBusyStatus = false;
 
 	private static string _pipelineStatusText = string.Empty;
+	private static string _processingStatusBaseText = string.Empty;
+	private static readonly Stopwatch _processingStopwatch = new Stopwatch();
+	private static DispatcherTimer _processingElapsedTimer = null;
+	private static MainViewModel _processingElapsedViewModel = null;
+	private const int MaxConcurrentDialogueTts = 3;
 
 	private static bool _forceFfmpegOnly = false;
 
@@ -484,6 +515,7 @@ public static class Hook
 			{
 				WireAutoUpdateCenterTool(window);
 			}
+			RestoreHeaderEngineControls(window);
 			TryAttachExistingPreviewVideo(window);
 			WirePreviewAudioSync(window);
 			ApplyModernStudioRedesign(window);
@@ -1046,22 +1078,12 @@ public static class Hook
 			}
 			else if (e.PropertyName == "BusyStatusText" && _transcriptionCommandRunning && !_normalizingBusyStatus)
 			{
-				string currentStatus = vm.BusyStatusText ?? string.Empty;
-				string normalized = "ជំហាន 1/6៖ ទាញយកអត្ថបទនិយាយពីវីដេអូ...";
-				if (!string.Equals(currentStatus, normalized, StringComparison.Ordinal))
-				{
-					_normalizingBusyStatus = true;
-					vm.BusyStatusText = normalized;
-					_normalizingBusyStatus = false;
-				}
+				UpdateElapsedProcessingStatus(vm);
 			}
 			else if (e.PropertyName == "BusyStatusText" && _isPipelineRunning && !_normalizingBusyStatus
-				&& !string.IsNullOrWhiteSpace(_pipelineStatusText)
-				&& !string.Equals(vm.BusyStatusText, _pipelineStatusText, StringComparison.Ordinal))
+				&& !string.IsNullOrWhiteSpace(_pipelineStatusText))
 			{
-				_normalizingBusyStatus = true;
-				vm.BusyStatusText = _pipelineStatusText;
-				_normalizingBusyStatus = false;
+				UpdateElapsedProcessingStatus(vm);
 			}
 			else if (e.PropertyName == "IsBusy" && vm.IsBusy && !_isModalCloseInjected)
 			{
@@ -1087,7 +1109,8 @@ public static class Hook
 					ClearGeminiQuotaError();
 					wasRunning = true;
 					_transcriptionCommandRunning = true;
-					vm.BusyStatusText = "ជំហាន 1/6៖ ទាញយកអត្ថបទនិយាយពីវីដេអូ...";
+					StartProcessingElapsedTimer(vm, window.Dispatcher);
+					SetElapsedProcessingStatus(vm, "ជំហាន 1/6៖ ទាញយកអត្ថបទនិយាយពីវីដេអូ...");
 					SetDialogueEditingEnabled(window, vm, false);
 				}
 				else if (wasRunning)
@@ -1110,6 +1133,8 @@ public static class Hook
 							return;
 						}
 						SetDialogueEditingEnabled(window, vm, true);
+						vm.BusyStatusText = string.Empty;
+						StopProcessingElapsedTimer();
 						return;
 					}
 					if (vm.DialogueLines != null && vm.DialogueLines.Count > 0 && !_isPipelineRunning)
@@ -1120,6 +1145,8 @@ public static class Hook
 					else
 					{
 						SetDialogueEditingEnabled(window, vm, true);
+						vm.BusyStatusText = string.Empty;
+						StopProcessingElapsedTimer();
 					}
 				}
 			}
@@ -1697,12 +1724,103 @@ public static class Hook
 	private static void SetPipelineStatus(MainViewModel vm, string status)
 	{
 		_pipelineStatusText = status ?? string.Empty;
-		vm.BusyStatusText = _pipelineStatusText;
+		SetElapsedProcessingStatus(vm, _pipelineStatusText);
 		if (_pipelineStatusText.StartsWith("ជំហាន 2/6", StringComparison.Ordinal)) vm.BusyProgressPercent = Math.Max(vm.BusyProgressPercent, 20.0);
 		else if (_pipelineStatusText.StartsWith("ជំហាន 3/6", StringComparison.Ordinal)) vm.BusyProgressPercent = Math.Max(vm.BusyProgressPercent, 35.0);
 		else if (_pipelineStatusText.StartsWith("ជំហាន 4/6", StringComparison.Ordinal)) vm.BusyProgressPercent = Math.Max(vm.BusyProgressPercent, 50.0);
 		else if (_pipelineStatusText.StartsWith("ជំហាន 5/6", StringComparison.Ordinal)) vm.BusyProgressPercent = Math.Max(vm.BusyProgressPercent, 85.0);
 		else if (_pipelineStatusText.StartsWith("ជំហាន 6/6", StringComparison.Ordinal)) vm.BusyProgressPercent = Math.Max(vm.BusyProgressPercent, 92.0);
+	}
+
+	private static string FormatElapsedDuration(TimeSpan elapsed)
+	{
+		int totalMinutes = Math.Max(0, (int)elapsed.TotalMinutes);
+		if (totalMinutes >= 60)
+			return $"ចំណាយពេល {totalMinutes / 60} ម៉ោង {totalMinutes % 60} នាទី";
+		return $"ចំណាយពេល {totalMinutes} នាទី {Math.Max(0, elapsed.Seconds)} វិនាទី";
+	}
+
+	private static string StripElapsedSuffix(string status)
+	{
+		const string marker = "\n  ";
+		int markerIndex = (status ?? string.Empty).IndexOf(marker, StringComparison.Ordinal);
+		return markerIndex >= 0 ? status.Substring(0, markerIndex) : (status ?? string.Empty);
+	}
+
+	private static void StartProcessingElapsedTimer(MainViewModel vm, Dispatcher dispatcher, bool restart = false)
+	{
+		if (restart || !_processingStopwatch.IsRunning)
+			_processingStopwatch.Restart();
+		_processingElapsedViewModel = vm;
+		if (_processingElapsedTimer == null || !ReferenceEquals(_processingElapsedTimer.Dispatcher, dispatcher))
+		{
+			_processingElapsedTimer?.Stop();
+			_processingElapsedTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+			{
+				Interval = TimeSpan.FromSeconds(1)
+			};
+			_processingElapsedTimer.Tick += (s, e) => UpdateElapsedProcessingStatus(_processingElapsedViewModel);
+		}
+		if (!_processingElapsedTimer.IsEnabled)
+			_processingElapsedTimer.Start();
+		UpdateElapsedProcessingStatus(vm);
+	}
+
+	private static void SetElapsedProcessingStatus(MainViewModel vm, string status)
+	{
+		_processingElapsedViewModel = vm;
+		_processingStatusBaseText = StripElapsedSuffix(status);
+		UpdateElapsedProcessingStatus(vm);
+	}
+
+	private static void UpdateElapsedProcessingStatus(MainViewModel vm)
+	{
+		if (vm == null) return;
+		string status = _processingStatusBaseText;
+		if (_processingStopwatch.IsRunning)
+			status += Environment.NewLine + "  " + FormatElapsedDuration(_processingStopwatch.Elapsed);
+		if (!string.Equals(vm.BusyStatusText, status, StringComparison.Ordinal))
+		{
+			_normalizingBusyStatus = true;
+			try { vm.BusyStatusText = status; }
+			finally { _normalizingBusyStatus = false; }
+		}
+	}
+
+	private static void StopProcessingElapsedTimer()
+	{
+		_processingElapsedTimer?.Stop();
+		_processingStopwatch.Stop();
+		_processingElapsedViewModel = null;
+		_processingStatusBaseText = string.Empty;
+		_pipelineStatusText = string.Empty;
+	}
+
+	private static async Task<int> SynthesizeDialogueLinesConcurrentlyAsync(
+		MainViewModel vm,
+		IReadOnlyList<DialogueLine> lines,
+		Action<DialogueLine, int, int> onLineCompleted = null)
+	{
+		if (vm == null || lines == null || lines.Count == 0) return 0;
+		using SemaphoreSlim gate = new SemaphoreSlim(MaxConcurrentDialogueTts, MaxConcurrentDialogueTts);
+		int completed = 0;
+		Task[] tasks = lines.Select(async line =>
+		{
+			await gate.WaitAsync();
+			try
+			{
+				if (_cancelRequested) return;
+				await SynthesizeSingleLineSafelyAsync(vm, line);
+				int done = Interlocked.Increment(ref completed);
+				onLineCompleted?.Invoke(line, done, lines.Count);
+			}
+			finally
+			{
+				gate.Release();
+			}
+		}).ToArray();
+		await Task.WhenAll(tasks);
+		return completed;
 	}
 
 	private static string ConsumeGeminiQuotaError()
@@ -1929,102 +2047,22 @@ public static class Hook
 		return (0, 0);
 	}
 
-	private static void EnsureAllDialogueLinesApproved(MainViewModel vm)
+	private static int MarkExistingDialogueAudioApproved(MainViewModel vm)
 	{
-		if (vm?.DialogueLines == null || vm.DialogueLines.Count == 0) return;
-		string projId = vm.CurrentProject?.Id ?? "";
-		string cacheDir = !string.IsNullOrEmpty(projId) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "AudioCache", projId) : "";
-		if (!string.IsNullOrEmpty(cacheDir)) Directory.CreateDirectory(cacheDir);
-
+		if (vm?.DialogueLines == null) return 0;
 		int approved = 0;
-		List<DialogueLine> missingAudioLines = new List<DialogueLine>();
-
 		foreach (DialogueLine line in vm.DialogueLines)
 		{
-			if (string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath) || new FileInfo(line.AudioFilePath).Length < 3500)
-			{
-				if (!string.IsNullOrEmpty(cacheDir))
-				{
-					string cand1 = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
-					string cand2 = Path.Combine(cacheDir, $"line_{line.Index}.wav");
-					if (File.Exists(cand1) && new FileInfo(cand1).Length > 3500) line.AudioFilePath = cand1;
-					else if (File.Exists(cand2) && new FileInfo(cand2).Length > 3500) line.AudioFilePath = cand2;
-				}
-
-				// If not found in current project's cache, search across other project caches in AudioCache
-				if (string.IsNullOrEmpty(line.AudioFilePath) || !File.Exists(line.AudioFilePath))
-				{
-					try
-					{
-						string baseAudioCache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "AudioCache");
-						if (Directory.Exists(baseAudioCache))
-						{
-							foreach (string otherProjDir in Directory.GetDirectories(baseAudioCache))
-							{
-								string otherCand = Path.Combine(otherProjDir, $"line_{line.Index}.mp3");
-								if (File.Exists(otherCand) && new FileInfo(otherCand).Length > 3500)
-								{
-									if (!string.IsNullOrEmpty(cacheDir))
-									{
-										string localCopy = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
-										File.Copy(otherCand, localCopy, true);
-										line.AudioFilePath = localCopy;
-									}
-									else
-									{
-										line.AudioFilePath = otherCand;
-									}
-									break;
-								}
-							}
-						}
-					}
-					catch { }
-				}
-			}
-
-			if (!string.IsNullOrEmpty(line.AudioFilePath) && File.Exists(line.AudioFilePath) && new FileInfo(line.AudioFilePath).Length > 3500)
+			if (!string.IsNullOrWhiteSpace(line.AudioFilePath)
+				&& File.Exists(line.AudioFilePath)
+				&& new FileInfo(line.AudioFilePath).Length > 3500)
 			{
 				line.IsApproved = true;
 				approved++;
 			}
-			else
-			{
-				string txt = !string.IsNullOrWhiteSpace(line.CorrectedKhmer) ? line.CorrectedKhmer : line.DraftKhmer;
-				if (!string.IsNullOrWhiteSpace(txt)) missingAudioLines.Add(line);
-			}
 		}
-
-		if (missingAudioLines.Count > 0 && !string.IsNullOrEmpty(cacheDir))
-		{
-			Log($"EnsureAllDialogueLinesApproved: Auto-synthesizing {missingAudioLines.Count} missing Khmer voice line(s) before export...");
-			foreach (DialogueLine line in missingAudioLines)
-			{
-				try
-				{
-					string text = !string.IsNullOrWhiteSpace(line.CorrectedKhmer) ? line.CorrectedKhmer : line.DraftKhmer;
-					string voice = string.IsNullOrWhiteSpace(line.VoiceProfile) ? ResolveDialogueVoice(line) : line.VoiceProfile;
-					string outPath = Path.Combine(cacheDir, $"line_{line.Index}.mp3");
-					double speed = line.Speed > 0.1 ? line.Speed : 1.0;
-					double volume = line.Volume > 0.1 ? line.Volume : 1.0;
-					int pitch = line.Pitch;
-
-					bool ok = RunDirectPythonTtsAsync(text, outPath, voice, speed, volume, pitch).GetAwaiter().GetResult();
-					if (ok && File.Exists(outPath) && new FileInfo(outPath).Length > 3500)
-					{
-						line.AudioFilePath = outPath;
-						line.IsApproved = true;
-						approved++;
-					}
-				}
-				catch (Exception ex)
-				{
-					Log($"Auto-synthesis for line {line.Index} error: {ex.Message}");
-				}
-			}
-		}
-
-		Log($"EnsureAllDialogueLinesApproved: {approved}/{vm.DialogueLines.Count} dialogue line(s) approved with audio.");
+		Log($"Export prep: marked {approved}/{vm.DialogueLines.Count} existing dialogue audio file(s) approved without blocking for TTS.");
+		return approved;
 	}
 
 	private static void PreExportSync(MainViewModel vm, Window window)
@@ -2035,8 +2073,6 @@ public static class Hook
 			{
 				vm.CurrentProject.VideoPath = _originalVideoSourcePath;
 			}
-
-			EnsureAllDialogueLinesApproved(vm);
 
 			if (vm.AudioMix != null)
 			{
@@ -2062,7 +2098,6 @@ public static class Hook
 				vm.AudioMix.KhmerDubVolume = 3.0;
 			}
 
-			InjectTextLayersForExport(vm, window);
 		}
 		catch (Exception ex)
 		{
@@ -2144,7 +2179,7 @@ public static class Hook
 						double activity = Math.Min(94.0, 8.0 + 86.0 * (1.0 - Math.Exp(-elapsed / 55.0)));
 						vm.BusyProgressPercent = Math.Max(vm.BusyProgressPercent, activity);
 						string stage = activity < 38.0 ? "Mixing Khmer audio" : (activity < 82.0 ? "Rendering video" : "Finalizing export");
-						vm.BusyStatusText = $"{stage}...  Elapsed {TimeSpan.FromSeconds(elapsed):mm\\:ss}";
+						vm.BusyStatusText = $"{stage}...  {FormatElapsedDuration(TimeSpan.FromSeconds(elapsed))}";
 					};
 					_exportProgressTimer.Start();
 				}
@@ -2205,9 +2240,9 @@ public static class Hook
 			}
 			RemoveTemporaryExportOverlays(vm);
 
-			// 1. Ensure all dialogue lines with synthesized audio are marked IsApproved = true
-			// so FFmpeg BuildKhmerDubAudioAsync includes them in the exported audio track!
-			EnsureAllDialogueLinesApproved(vm);
+			// Mark cached voice files only. Never run network TTS synchronously from the
+			// Export command: this code runs after the Save dialog has already returned.
+			MarkExistingDialogueAudioApproved(vm);
 
 			// 2. Ensure Khmer dub volume is properly boosted and original Chinese audio is fully muted
 			if (vm.AudioMix != null)
@@ -2983,35 +3018,9 @@ public static class Hook
 			int idx = settingsBtn != null ? targetHost.Children.IndexOf(settingsBtn) : targetHost.Children.Count;
 			targetHost.Children.Insert(Math.Min(targetHost.Children.Count, Math.Max(0, idx)), updateBtn);
 
-			if (!targetHost.Children.OfType<Button>().Any(b => (b.Tag as string) == "GeminiKeysPoolButton"))
+			foreach (Button oldGeminiButton in targetHost.Children.OfType<Button>().Where(b => (b.Tag as string) == "GeminiKeysPoolButton" ).ToList())
 			{
-				Button geminiKeysBtn = new Button
-				{
-					Tag = "GeminiKeysPoolButton",
-					Content = "🔑 Gemini Keys",
-					ToolTip = "Gemini API Multi-Key Pool Manager — Add multiple API keys to increase tokens and avoid rate limits",
-					Height = 32.0,
-					MinWidth = 115.0,
-					Margin = new Thickness(4.0, 0.0, 4.0, 0.0),
-					Cursor = Cursors.Hand,
-					Background = new SolidColorBrush(Color.FromRgb(24, 30, 48)),
-					BorderBrush = new SolidColorBrush(Color.FromRgb(245, 158, 11)),
-					BorderThickness = new Thickness(1.0),
-					Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36)),
-					FontWeight = FontWeights.SemiBold,
-					FontSize = 11.5,
-					Padding = new Thickness(10.0, 4.0, 10.0, 4.0),
-					VerticalAlignment = VerticalAlignment.Center
-				};
-				SetControlCornerRadius(geminiKeysBtn, 8);
-				AttachModernHover(geminiKeysBtn,
-					hoverBackground: new SolidColorBrush(Color.FromRgb(180, 83, 9)),
-					hoverBorder: new SolidColorBrush(Color.FromRgb(252, 211, 77)));
-
-				geminiKeysBtn.Click += (s, e) => ShowGeminiKeyPoolDialog(window, vm);
-
-				int gIdx = targetHost.Children.IndexOf(updateBtn);
-				targetHost.Children.Insert(Math.Min(targetHost.Children.Count, Math.Max(0, gIdx)), geminiKeysBtn);
+				targetHost.Children.Remove(oldGeminiButton);
 			}
 
 			if (settingsBtn != null)
@@ -3043,6 +3052,188 @@ public static class Hook
 		{
 			Log("WireAutoUpdateCenterTool error: " + ex.Message);
 		}
+	}
+
+	private static void RestoreHeaderEngineControls(Window window)
+	{
+		try
+		{
+			if (window == null || window.DataContext is not MainViewModel vm) return;
+			Border mascotBadge = FindAllVisualChildren<Border>((DependencyObject)(object)window)
+				.FirstOrDefault(b => (b.ToolTip as string ?? "").Contains("SNA AI Dubber Mascot Studio", StringComparison.OrdinalIgnoreCase));
+			if (mascotBadge?.Parent is not Panel headerCenter) return;
+
+			StackPanel controls = headerCenter.Children.OfType<StackPanel>()
+				.FirstOrDefault(p => (p.Tag as string) == "HeaderEngineControls");
+			if (controls == null)
+			{
+				controls = new StackPanel
+				{
+					Tag = "HeaderEngineControls",
+					Orientation = Orientation.Horizontal,
+					HorizontalAlignment = HorizontalAlignment.Center,
+					VerticalAlignment = VerticalAlignment.Center
+				};
+
+				Button engineButton = new Button
+				{
+					Tag = "HeaderAiEngineButton",
+					Content = "⚡ AI ENGINE",
+					ToolTip = "View AI translation and Khmer voice engine status",
+					Height = 32,
+					MinWidth = 108,
+					Margin = new Thickness(4, 0, 8, 0),
+					Padding = new Thickness(10, 4, 10, 4),
+					Cursor = Cursors.Hand,
+					Background = new SolidColorBrush(Color.FromRgb(49, 27, 99)),
+					BorderBrush = new SolidColorBrush(Color.FromRgb(124, 58, 237)),
+					BorderThickness = new Thickness(1),
+					Foreground = Brushes.White,
+					FontWeight = FontWeights.Bold,
+					FontSize = 11,
+					VerticalAlignment = VerticalAlignment.Center
+				};
+				SetControlCornerRadius(engineButton, 8);
+				AttachModernHover(engineButton,
+					hoverBackground: new SolidColorBrush(Color.FromRgb(109, 40, 217)),
+					hoverBorder: new SolidColorBrush(Color.FromRgb(167, 139, 250)));
+				engineButton.Click += (s, e) => ShowAiEngineStatusDialog(window, vm);
+
+				Border modeBadge = new Border
+				{
+					Tag = "HeaderOnlineModeBadge",
+					CornerRadius = new CornerRadius(14),
+					Padding = new Thickness(10, 5, 10, 5),
+					Margin = new Thickness(0, 0, 4, 0),
+					BorderThickness = new Thickness(1),
+					VerticalAlignment = VerticalAlignment.Center,
+					Cursor = Cursors.Hand,
+					ToolTip = "Click to manage Gemini API keys"
+				};
+				TextBlock modeText = new TextBlock
+				{
+					Tag = "HeaderOnlineModeText",
+					FontSize = 9.5,
+					FontWeight = FontWeights.Bold,
+					VerticalAlignment = VerticalAlignment.Center
+				};
+				modeBadge.Child = modeText;
+				modeBadge.MouseLeftButtonUp += (s, e) => ShowGeminiKeyPoolDialog(window, vm);
+
+				controls.Children.Add(engineButton);
+				controls.Children.Add(modeBadge);
+				headerCenter.Children.Add(controls);
+				Log("Restored AI ENGINE button and Gemini online status badge in the top header.");
+			}
+
+			TextBlock status = FindVisualChild<TextBlock>((DependencyObject)(object)controls,
+				t => (t.Tag as string) == "HeaderOnlineModeText");
+			Border badge = FindVisualChild<Border>((DependencyObject)(object)controls,
+				b => (b.Tag as string) == "HeaderOnlineModeBadge");
+			bool connected = !string.IsNullOrWhiteSpace(vm.GeminiApiKeyInput) || LoadGeminiApiKeys().Count > 0;
+			if (status != null)
+			{
+				status.Text = connected ? "ONLINE MODE – GEMINI CONNECTED" : "ONLINE MODE – KEY REQUIRED";
+				status.Foreground = new SolidColorBrush(connected ? Color.FromRgb(167, 243, 208) : Color.FromRgb(253, 230, 138));
+			}
+			if (badge != null)
+			{
+				badge.Background = new SolidColorBrush(connected ? Color.FromRgb(6, 55, 42) : Color.FromRgb(70, 50, 8));
+				badge.BorderBrush = new SolidColorBrush(connected ? Color.FromRgb(16, 185, 129) : Color.FromRgb(245, 158, 11));
+			}
+		}
+		catch (Exception ex)
+		{
+			Log("RestoreHeaderEngineControls error: " + ex.Message);
+		}
+	}
+
+	private static void ShowAiEngineStatusDialog(Window owner, MainViewModel vm)
+	{
+		try
+		{
+			bool connected = !string.IsNullOrWhiteSpace(vm?.GeminiApiKeyInput) || LoadGeminiApiKeys().Count > 0;
+			Window dialog = new Window
+			{
+				Title = "SNA-Dubber AI Engine",
+				Owner = owner,
+				Width = 470,
+				Height = 300,
+				ResizeMode = ResizeMode.NoResize,
+				WindowStartupLocation = WindowStartupLocation.CenterOwner,
+				Background = new SolidColorBrush(Color.FromRgb(11, 18, 32)),
+				Foreground = Brushes.White,
+				FontFamily = owner?.FontFamily ?? new System.Windows.Media.FontFamily("Segoe UI")
+			};
+			StackPanel body = new StackPanel { Margin = new Thickness(22) };
+			TextBlock title = new TextBlock
+			{
+				Text = "SNA-DUBBER AI ENGINE",
+				FontSize = 18,
+				FontWeight = FontWeights.Bold,
+				Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+				Margin = new Thickness(0, 0, 0, 14)
+			};
+			body.Children.Add(title);
+			body.Children.Add(CreateEngineStatusRow("Translation", "Gemini AI", connected ? "Connected" : "API key required", connected));
+			body.Children.Add(CreateEngineStatusRow("Khmer speech", "Microsoft Edge TTS", "Piset · Srey Mom", true));
+			TextBlock note = new TextBlock
+			{
+				Text = "Gemini handles translation. Edge TTS generates the Khmer voice preview and dubbing.",
+				TextWrapping = TextWrapping.Wrap,
+				Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+				Margin = new Thickness(0, 14, 0, 18)
+			};
+			body.Children.Add(note);
+			StackPanel actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+			Button close = new Button
+			{
+				Content = "Close",
+				Padding = new Thickness(14, 7, 14, 7),
+				Background = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+				Foreground = Brushes.White,
+				BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+				BorderThickness = new Thickness(1),
+				Cursor = Cursors.Hand
+			};
+			close.Click += (s, e) => dialog.Close();
+			actions.Children.Add(close);
+			body.Children.Add(actions);
+			dialog.Content = body;
+			dialog.ShowDialog();
+		}
+		catch (Exception ex)
+		{
+			Log("ShowAiEngineStatusDialog error: " + ex.Message);
+		}
+	}
+
+	private static Border CreateEngineStatusRow(string label, string engine, string status, bool ready)
+	{
+		StackPanel content = new StackPanel { Orientation = Orientation.Horizontal };
+		content.Children.Add(new TextBlock
+		{
+			Text = label + ":  ",
+			FontWeight = FontWeights.SemiBold,
+			Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+			VerticalAlignment = VerticalAlignment.Center
+		});
+		content.Children.Add(new TextBlock
+		{
+			Text = engine + "  ·  " + status,
+			Foreground = new SolidColorBrush(ready ? Color.FromRgb(52, 211, 153) : Color.FromRgb(251, 191, 36)),
+			VerticalAlignment = VerticalAlignment.Center
+		});
+		return new Border
+		{
+			Background = new SolidColorBrush(Color.FromRgb(18, 29, 47)),
+			BorderBrush = new SolidColorBrush(Color.FromRgb(38, 58, 88)),
+			BorderThickness = new Thickness(1),
+			CornerRadius = new CornerRadius(8),
+			Padding = new Thickness(12, 11, 12, 11),
+			Margin = new Thickness(0, 0, 0, 8),
+			Child = content
+		};
 	}
 
 	private static bool _postUpdateChecked = false;
@@ -6070,7 +6261,8 @@ del ""%~f0""
 			{
 				try
 				{
-					bool isPreRendered = player.Source != null && player.Source.LocalPath.Contains("PreviewCache");
+					bool isPreRendered = player.Source != null && player.Source.LocalPath.Contains("PreviewCache", StringComparison.OrdinalIgnoreCase)
+						&& IsPreviewVideoAudioCurrent(vm, player.Source.LocalPath);
 					if (isPreRendered)
 					{
 						player.IsMuted = false;
@@ -6116,7 +6308,7 @@ del ""%~f0""
 								string staticPreviewVideo = Path.Combine(projectDir, "preview_khmer.mp4");
 								bool hasKhmerAudio = vm.DialogueLines != null && vm.DialogueLines.Any(l => !string.IsNullOrEmpty(l.AudioFilePath) && File.Exists(l.AudioFilePath));
 
-								if (hasKhmerAudio && File.Exists(staticPreviewVideo))
+								if (hasKhmerAudio && IsPreviewVideoAudioCurrent(vm, staticPreviewVideo))
 								{
 									if (player.Source == null || !player.Source.LocalPath.Equals(staticPreviewVideo, StringComparison.OrdinalIgnoreCase))
 									{
@@ -6193,7 +6385,8 @@ del ""%~f0""
 						return;
 					}
 
-					bool isPreRendered = player.Source != null && player.Source.LocalPath.Contains("PreviewCache");
+					bool isPreRendered = player.Source != null && player.Source.LocalPath.Contains("PreviewCache", StringComparison.OrdinalIgnoreCase)
+						&& IsPreviewVideoAudioCurrent(vm, player.Source.LocalPath);
 					if (isPreRendered)
 					{
 						if (player.IsMuted) player.IsMuted = false;
@@ -6208,7 +6401,7 @@ del ""%~f0""
 					if (vm.CurrentProject != null && !string.IsNullOrEmpty(vm.CurrentProject.Id))
 					{
 						string cachedPreview = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SNA-Dubber", "PreviewCache", vm.CurrentProject.Id, "preview_khmer.mp4");
-						if (File.Exists(cachedPreview))
+						if (IsPreviewVideoAudioCurrent(vm, cachedPreview))
 						{
 							try
 							{
@@ -6364,6 +6557,7 @@ del ""%~f0""
 		}
 		_cancelRequested = false;
 		_isPipelineRunning = true;
+		StartProcessingElapsedTimer(vm, window.Dispatcher);
 		try
 		{
 			vm.IsBusy = true;
@@ -6420,26 +6614,23 @@ del ""%~f0""
 				// timeline notifications can touch the live ObservableCollection.
 				List<DialogueLine> synthesisLines = vm.DialogueLines.ToList();
 				SetPipelineStatus(vm, $"ជំហាន 4/6៖ បង្កើត ពិនិត្យ និងបំពេញសំឡេងខ្មែរដែលខ្វះ (0/{vm.DialogueLines.Count})...");
-				for (int i = 0; i < synthesisLines.Count; i++)
+				List<DialogueLine> linesToSynthesize = synthesisLines.Where(dialogueLine =>
 				{
-					if (_cancelRequested)
-					{
-						return;
-					}
-					DialogueLine dialogueLine = synthesisLines[i];
-					bool audioFileValid = !string.IsNullOrEmpty(dialogueLine.AudioFilePath) 
-						&& File.Exists(dialogueLine.AudioFilePath) 
+					bool audioFileValid = !string.IsNullOrWhiteSpace(dialogueLine.AudioFilePath)
+						&& File.Exists(dialogueLine.AudioFilePath)
 						&& new FileInfo(dialogueLine.AudioFilePath).Length > 3500;
+					string speechText = GetDialogueSpeechText(dialogueLine);
 					bool textChanged = string.Equals(dialogueLine.LastSynthesizedText, "__VOICE_SPEED_CHANGED__", StringComparison.Ordinal)
-						|| (!string.IsNullOrWhiteSpace(dialogueLine.CorrectedKhmer)
-							&& !string.Equals(dialogueLine.LastSynthesizedText, dialogueLine.CorrectedKhmer, StringComparison.Ordinal));
-					if (textChanged || !audioFileValid)
-					{
-						vm.BusyProgressPercent = 50.0 + 30.0 * (i + 1) / Math.Max(1, synthesisLines.Count);
-						SetPipelineStatus(vm, $"ជំហាន 4/6៖ បង្កើត ពិនិត្យ និងបំពេញសំឡេងខ្មែរដែលខ្វះ ({i + 1}/{vm.DialogueLines.Count}) បន្ទាត់ទី {dialogueLine.Index}...");
-						await SynthesizeSingleLineSafelyAsync(vm, dialogueLine);
-					}
-				}
+						|| (!string.IsNullOrWhiteSpace(speechText)
+							&& !string.Equals(dialogueLine.LastSynthesizedText, speechText, StringComparison.Ordinal));
+					return textChanged || !audioFileValid;
+				}).ToList();
+				SetPipelineStatus(vm, $"Step 4/6: Preparing Khmer voice (0/{linesToSynthesize.Count})...");
+				await SynthesizeDialogueLinesConcurrentlyAsync(vm, linesToSynthesize, (line, done, total) =>
+				{
+					vm.BusyProgressPercent = 50.0 + 30.0 * done / Math.Max(1, total);
+					SetPipelineStatus(vm, $"Step 4/6: Generating Khmer voice ({done}/{total}) - Line #{line.Index}...");
+				});
 				SetPipelineStatus(vm, "ជំហាន 5/6៖ រក្សាទុក និងរៀបចំគម្រោងសំឡេងខ្មែរ...");
 				try
 				{
@@ -6456,6 +6647,11 @@ del ""%~f0""
 			vm.IsBusy = true;
 			SetPipelineStatus(vm, "ជំហាន 6/6៖ បង្កើតវីដេអូ Preview ចុងក្រោយ...");
 			Log("Starting Auto Step 5: BuildPreviewVideoAsync");
+			int autoFittedOverlapCount = await AutoFixAllDialogueOverlapsAsync(vm);
+			if (autoFittedOverlapCount > 0)
+			{
+				try { await vm.SaveProjectAsync(); } catch { }
+			}
 			string previewVideo = await BuildPreviewVideoAsync(vm);
 			if (_cancelRequested)
 			{
@@ -6502,6 +6698,7 @@ del ""%~f0""
 		{
 			_pipelineStatusText = string.Empty;
 			_isPipelineRunning = false;
+			StopProcessingElapsedTimer();
 			vm.IsBusy = false;
 			vm.BusyStatusText = string.Empty;
 			_forceFfmpegOnly = false;
@@ -6522,10 +6719,11 @@ del ""%~f0""
 			return;
 		}
 		_cancelRequested = false;
+		StartProcessingElapsedTimer(vm, window.Dispatcher, restart: true);
 		vm.IsBusy = true;
 		try
 		{
-			vm.BusyStatusText = "Step 1/3: Checking dialogue translation...";
+			SetElapsedProcessingStatus(vm, "Step 1/3: Checking dialogue translation...");
 			await EnsureAllLinesTranslatedAsync(vm);
 			if (_cancelRequested)
 			{
@@ -6537,7 +6735,7 @@ del ""%~f0""
 				foreach (DialogueLine dialogueLine2 in vm.DialogueLines)
 				{
 					bool num = string.IsNullOrEmpty(dialogueLine2.AudioFilePath) || !File.Exists(dialogueLine2.AudioFilePath) || new FileInfo(dialogueLine2.AudioFilePath).Length < 3500;
-					bool flag = dialogueLine2.LastSynthesizedText != dialogueLine2.CorrectedKhmer;
+					bool flag = dialogueLine2.LastSynthesizedText != GetDialogueSpeechText(dialogueLine2);
 					if (num | flag)
 					{
 						linesToSynthesize.Add(dialogueLine2);
@@ -6545,16 +6743,11 @@ del ""%~f0""
 				}
 				if (linesToSynthesize.Count > 0)
 				{
-					for (int i = 0; i < linesToSynthesize.Count; i++)
+					SetElapsedProcessingStatus(vm, $"Step 2/3: Generating Khmer voices (0/{linesToSynthesize.Count})...");
+					await SynthesizeDialogueLinesConcurrentlyAsync(vm, linesToSynthesize, (line, done, total) =>
 					{
-						if (_cancelRequested)
-						{
-							return;
-						}
-						DialogueLine dialogueLine = linesToSynthesize[i];
-						vm.BusyStatusText = $"Step 2/3: Generating voice ({i + 1}/{linesToSynthesize.Count}): Line #{dialogueLine.Index}...";
-						await SynthesizeSingleLineSafelyAsync(vm, dialogueLine);
-					}
+						SetElapsedProcessingStatus(vm, $"Step 2/3: Generating Khmer voices ({done}/{total}) - Line #{line.Index}...");
+					});
 					try
 					{
 						await vm.SaveProjectAsync();
@@ -6568,7 +6761,12 @@ del ""%~f0""
 			{
 				return;
 			}
-			vm.BusyStatusText = "Step 3/3: Mixing Khmer voices and building preview video...";
+			int autoFittedOverlapCount = await AutoFixAllDialogueOverlapsAsync(vm);
+			if (autoFittedOverlapCount > 0)
+			{
+				try { await vm.SaveProjectAsync(); } catch { }
+			}
+			SetElapsedProcessingStatus(vm, "Step 3/3: Mixing Khmer voices and building preview video...");
 			string pv = await BuildPreviewVideoAsync(vm);
 			if (_cancelRequested)
 			{
@@ -6613,6 +6811,7 @@ del ""%~f0""
 		}
 		finally
 		{
+			StopProcessingElapsedTimer();
 			vm.IsBusy = false;
 			vm.BusyStatusText = string.Empty;
 		}
@@ -6638,7 +6837,7 @@ del ""%~f0""
 			return;
 		}
 		Log($"EnsureAllLinesTranslatedAsync: Found {list.Count} lines requiring translation.");
-		vm.BusyStatusText = $"Gemini is checking and polishing {list.Count} Khmer dialogue lines...";
+		SetElapsedProcessingStatus(vm, $"Gemini is checking and polishing {list.Count} Khmer dialogue lines...");
 		try
 		{
 			if (await RunDirectPythonTranslateAsync(list))
@@ -6657,6 +6856,14 @@ del ""%~f0""
 		{
 			Log("EnsureAllLinesTranslatedAsync error: " + ex);
 		}
+	}
+
+	private static string GetDialogueSpeechText(DialogueLine line)
+	{
+		if (line == null) return string.Empty;
+		if (!string.IsNullOrWhiteSpace(line.CorrectedKhmer)) return line.CorrectedKhmer;
+		if (!string.IsNullOrWhiteSpace(line.DraftKhmer)) return line.DraftKhmer;
+		return line.ChineseText ?? string.Empty;
 	}
 
 	private static bool LineNeedsTranslation(DialogueLine l)
@@ -6746,8 +6953,12 @@ del ""%~f0""
 			string stdout = "";
 			using (Process p = Process.Start(startInfo))
 			{
-				stdout = await p.StandardOutput.ReadToEndAsync();
+				Task<string> stdoutTask = p.StandardOutput.ReadToEndAsync();
+				Task<string> stderrTask = p.StandardError.ReadToEndAsync();
 				await p.WaitForExitAsync();
+				stdout = await stdoutTask;
+				string stderr = await stderrTask;
+				if (!string.IsNullOrWhiteSpace(stderr)) Log("Translation engine diagnostics: " + stderr.Trim());
 			}
 			try
 			{
@@ -6932,22 +7143,34 @@ del ""%~f0""
 		try
 		{
 			if (string.IsNullOrWhiteSpace(audioPath) || !File.Exists(audioPath) || maxAllowedMs <= 400) return false;
-			int actualMs = GetAudioFileDurationMs(audioPath);
-			// If already fits or only slightly longer (by up to 250ms), preserve 100% natural voice pacing
-			if (actualMs <= maxAllowedMs + 250) return true;
+
+			// Always fit from the original generated sentence so repeated previews never
+			// compound the speed change or make the voice progressively faster.
+			string naturalPath = audioPath + ".natural.mp3";
+			if (!File.Exists(naturalPath)) File.Copy(audioPath, naturalPath, true);
+			int naturalMs = GetAudioFileDurationMs(naturalPath);
+			if (naturalMs <= 0) return false;
+			int currentMs = GetAudioFileDurationMs(audioPath);
+			if (naturalMs <= maxAllowedMs)
+			{
+				if (Math.Abs(currentMs - naturalMs) > 80)
+				{
+					File.Copy(naturalPath, audioPath, true);
+					return true;
+				}
+				return false;
+			}
 
 			string ffmpeg = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", "ffmpeg.exe");
 			if (!File.Exists(ffmpeg)) ffmpeg = "ffmpeg";
-
-			double tempo = (double)actualMs / (double)maxAllowedMs;
-			// Gentle tempo clamp (1.04 to 1.15 max). NEVER speed up unnaturally!
-			double clampedTempo = Math.Min(1.15, Math.Max(1.04, tempo));
-
+			double tempo = (double)naturalMs / maxAllowedMs;
+			// Gentle pitch-preserving tempo adjustment, capped at 25%; never truncate speech.
+			double clampedTempo = Math.Min(1.25, Math.Max(1.03, tempo));
 			string tempFitted = audioPath + ".fit.mp3";
 			ProcessStartInfo psi = new ProcessStartInfo
 			{
 				FileName = ffmpeg,
-				Arguments = $"-y -i \"{audioPath}\" -filter:a \"atempo={clampedTempo.ToString("0.###", CultureInfo.InvariantCulture)}\" -c:a libmp3lame -b:a 192k \"{tempFitted}\"",
+				Arguments = $"-y -i \"{naturalPath}\" -filter:a \"atempo={clampedTempo.ToString("0.###", CultureInfo.InvariantCulture)}\" -c:a libmp3lame -b:a 192k \"{tempFitted}\"",
 				UseShellExecute = false,
 				CreateNoWindow = true,
 				RedirectStandardError = true
@@ -6956,25 +7179,33 @@ del ""%~f0""
 			{
 				p.StandardError.ReadToEnd();
 				p.WaitForExit(6000);
-				if (File.Exists(tempFitted) && new FileInfo(tempFitted).Length > 0)
+				if (p.ExitCode == 0 && File.Exists(tempFitted) && new FileInfo(tempFitted).Length > 0)
 				{
-					// NEVER hard-truncate with -t and afade! Always preserve the complete spoken thought!
-					File.Copy(tempFitted, audioPath, true);
-					try { File.Delete(tempFitted); } catch { }
-					return true;
+					int fittedMs = GetAudioFileDurationMs(tempFitted);
+					if (fittedMs > 0 && fittedMs < naturalMs)
+					{
+						File.Copy(tempFitted, audioPath, true);
+						try { File.Delete(tempFitted); } catch { }
+						return true;
+					}
 				}
 			}
 		}
-		catch { }
+		catch (Exception ex)
+		{
+			Log("AutoFitAudioDuration error: " + ex.Message);
+		}
 		return false;
 	}
 
 	public static async Task<int> AutoFixAllDialogueOverlapsAsync(MainViewModel vm)
 	{
+		_lastDialogueAudioEndMs = 0;
 		if (vm?.DialogueLines == null || vm.DialogueLines.Count == 0) return 0;
 		return await Task.Run(() =>
 		{
 			int fixedCount = 0;
+			int latestAudioEndMs = 0;
 			try
 			{
 				List<DialogueLine> lines = vm.DialogueLines.OrderBy(x => x.Index).ToList();
@@ -6984,20 +7215,29 @@ del ""%~f0""
 					if (string.IsNullOrEmpty(cur.AudioFilePath) || !File.Exists(cur.AudioFilePath)) continue;
 
 					DialogueLine next = lines.Skip(i + 1).FirstOrDefault(x => x.StartMs > cur.StartMs);
-					int maxDur = (next != null) ? (next.StartMs - cur.StartMs - 120) : (cur.EndMs - cur.StartMs + 800);
+					int maxDur = (next != null) ? (next.StartMs - cur.StartMs - 150) : (cur.EndMs - cur.StartMs + 500);
 					if (maxDur < 500) maxDur = 500;
 
 					int actualDur = GetAudioFileDurationMs(cur.AudioFilePath);
+					latestAudioEndMs = Math.Max(latestAudioEndMs, cur.StartMs + actualDur);
 					if (actualDur > maxDur)
 					{
 						bool ok = AutoFitAudioDuration(cur.AudioFilePath, maxDur);
-						if (ok) fixedCount++;
+						if (ok)
+						{
+							fixedCount++;
+							int fittedDur = GetAudioFileDurationMs(cur.AudioFilePath);
+							latestAudioEndMs = Math.Max(latestAudioEndMs, cur.StartMs + fittedDur);
+							if (fittedDur > maxDur)
+								Log($"Dialogue line {cur.Index} still exceeds its timing window after the 25% speed limit; kept the complete sentence without trimming.");
+						}
 					}
 				}
 				if (fixedCount > 0)
 				{
 					Log($"AutoFixAllDialogueOverlapsAsync: Successfully fitted {fixedCount} dialogue lines to prevent audio collision.");
 				}
+				_lastDialogueAudioEndMs = latestAudioEndMs;
 			}
 			catch (Exception ex)
 			{
@@ -7033,6 +7273,7 @@ del ""%~f0""
 				l.LastSynthesizedText = "__EMPTY_TEXT__";
 				return false;
 			}
+			try { File.Delete(outPath + ".natural.mp3"); } catch { }
 			string voice = ResolveDialogueVoice(l);
 			l.VoiceProfile = voice;
 			// VoiceSpeed is a speech/TTS setting. Apply it to the generated voice;
@@ -7060,10 +7301,8 @@ del ""%~f0""
 			}
 			if (synthesized && File.Exists(outPath) && new FileInfo(outPath).Length > 3500)
 			{
-				EnsureAudioLoudnessBoost(outPath);
-
 				l.AudioFilePath = outPath;
-				l.LastSynthesizedText = l.CorrectedKhmer;
+				l.LastSynthesizedText = text2;
 				l.IsApproved = true;
 				return true;
 			}
@@ -7082,36 +7321,6 @@ del ""%~f0""
 		return false;
 	}
 
-	private static void EnsureAudioLoudnessBoost(string audioPath)
-	{
-		try
-		{
-			if (string.IsNullOrWhiteSpace(audioPath) || !File.Exists(audioPath)) return;
-			string ffmpeg = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools", "ffmpeg.exe");
-			if (!File.Exists(ffmpeg)) ffmpeg = "ffmpeg";
-
-			string tempBoosted = audioPath + ".loud.mp3";
-			ProcessStartInfo psi = new ProcessStartInfo
-			{
-				FileName = ffmpeg,
-				Arguments = $"-y -i \"{audioPath}\" -filter:a \"volume=2.8,alimiter=limit=0.98\" -c:a libmp3lame -b:a 192k \"{tempBoosted}\"",
-				UseShellExecute = false,
-				CreateNoWindow = true,
-				RedirectStandardError = true
-			};
-			using (Process process = Process.Start(psi))
-			{
-				process.StandardError.ReadToEnd();
-				process.WaitForExit(4000);
-				if (File.Exists(tempBoosted) && new FileInfo(tempBoosted).Length > 0)
-				{
-					File.Copy(tempBoosted, audioPath, true);
-					try { File.Delete(tempBoosted); } catch { }
-				}
-			}
-		}
-		catch { }
-	}
 
 	private static bool GenerateSilentAudioDirect(string outPath, double durationSec)
 	{
@@ -7170,6 +7379,11 @@ del ""%~f0""
 			tempJson = Path.GetTempFileName();
 			File.WriteAllText(tempJson, contents, Encoding.UTF8);
 			(string fileName, string prefixArguments) = ResolvePythonCommand();
+			if (!await EnsureEdgeTtsCompatibleAsync(fileName, prefixArguments))
+			{
+				Log("Direct Python TTS stopped because Edge TTS 7.3.1 or newer could not be installed.");
+				return false;
+			}
 			ProcessStartInfo startInfo = new ProcessStartInfo
 			{
 				FileName = fileName,
@@ -7190,8 +7404,17 @@ del ""%~f0""
 					Log($"Direct Python TTS exited with code {p.ExitCode}: {task2.Result.Trim()}");
 					return false;
 				}
+				if (!string.IsNullOrWhiteSpace(task2.Result))
+				{
+					Log($"Direct Python TTS diagnostics: {task2.Result.Trim()}");
+				}
+				if (!File.Exists(outPath) || new FileInfo(outPath).Length <= 3500)
+				{
+					Log($"Direct Python TTS returned no usable Khmer audio: {task.Result.Trim()}");
+					return false;
+				}
 			}
-			return File.Exists(outPath) && new FileInfo(outPath).Length > 3500;
+			return true;
 		}
 		catch (Exception ex)
 		{
@@ -7211,51 +7434,181 @@ del ""%~f0""
 		}
 	}
 
+	private static readonly object _pythonResolveLock = new object();
+	private static bool _pythonCommandResolved = false;
+	private static (string executable, string prefixArguments) _cachedPythonCommand = ("python", string.Empty);
+
 	private static (string executable, string prefixArguments) ResolvePythonCommand()
 	{
-		string configuredPython = Environment.GetEnvironmentVariable("PYTHON");
-		if (!string.IsNullOrWhiteSpace(configuredPython) && File.Exists(configuredPython))
+		lock (_pythonResolveLock)
 		{
-			return (configuredPython, string.Empty);
+			if (_pythonCommandResolved) return _cachedPythonCommand;
+			string configuredPython = Environment.GetEnvironmentVariable("PYTHON");
+			if (!string.IsNullOrWhiteSpace(configuredPython) && File.Exists(configuredPython) && HasEdgeTts(configuredPython, string.Empty))
+				return CachePythonCommand(configuredPython, string.Empty);
+
+			string windowsApps = Path.GetFullPath(Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+				"Microsoft", "WindowsApps")).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+			string[] pathEntries = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+				.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+			foreach (string entry in pathEntries)
+			{
+				try
+				{
+					string fullEntry = Path.GetFullPath(entry.Trim('"'));
+					if (string.Equals(fullEntry.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), windowsApps, StringComparison.OrdinalIgnoreCase)) continue;
+					string python = Path.Combine(fullEntry, "python.exe");
+					if (File.Exists(python) && HasEdgeTts(python, string.Empty)) return CachePythonCommand(python, string.Empty);
+				}
+				catch (Exception ex) { Log($"Skipping invalid Python PATH entry '{entry}': {ex.Message}"); }
+			}
+
+			foreach (string entry in pathEntries)
+			{
+				try
+				{
+					string fullEntry = Path.GetFullPath(entry.Trim('"'));
+					string launcher = Path.Combine(fullEntry, "py.exe");
+					if (File.Exists(launcher) && HasEdgeTts(launcher, "-3 ")) return CachePythonCommand(launcher, "-3 ");
+				}
+				catch (Exception ex) { Log($"Skipping invalid Python launcher PATH entry '{entry}': {ex.Message}"); }
+			}
+
+			Log("No Python interpreter with edge_tts was found on PATH; trying the PATH command as a fallback.");
+			return CachePythonCommand("python", string.Empty);
 		}
+	}
 
-		string windowsApps = Path.GetFullPath(Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-			"Microsoft", "WindowsApps")).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-		string[] pathEntries = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-			.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+	private static (string executable, string prefixArguments) CachePythonCommand(string executable, string prefixArguments)
+	{
+		_cachedPythonCommand = (executable, prefixArguments);
+		_pythonCommandResolved = true;
+		Log($"Cached TTS Python interpreter: {executable}");
+		return _cachedPythonCommand;
+	}
 
-		foreach (string entry in pathEntries)
+	private static bool HasEdgeTts(string executable, string prefixArguments)
+	{
+		try
 		{
-			try
+			using Process process = Process.Start(new ProcessStartInfo
 			{
-				string fullEntry = Path.GetFullPath(entry.Trim('"'));
-				if (string.Equals(fullEntry.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), windowsApps, StringComparison.OrdinalIgnoreCase)) continue;
-				string python = Path.Combine(fullEntry, "python.exe");
-				if (File.Exists(python)) return (python, string.Empty);
-			}
-			catch (Exception ex)
+				FileName = executable,
+				Arguments = $"{prefixArguments}-c \"import edge_tts\"",
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardError = true,
+				RedirectStandardOutput = true
+			})!;
+			if (!process.WaitForExit(5000))
 			{
-				Log($"Skipping invalid Python PATH entry '{entry}': {ex.Message}");
+				process.Kill(true);
+				return false;
 			}
+			return process.ExitCode == 0;
 		}
-
-		foreach (string entry in pathEntries)
+		catch (Exception ex)
 		{
-			try
-			{
-				string fullEntry = Path.GetFullPath(entry.Trim('"'));
-				string launcher = Path.Combine(fullEntry, "py.exe");
-				if (File.Exists(launcher)) return (launcher, "-3 ");
-			}
-			catch (Exception ex)
-			{
-				Log($"Skipping invalid Python launcher PATH entry '{entry}': {ex.Message}");
-			}
+			Log($"Python interpreter check failed for '{executable}': {ex.Message}");
+			return false;
 		}
+	}
 
-		Log("No installed Python interpreter was found outside WindowsApps; trying the PATH command.");
-		return ("python", string.Empty);
+	private static readonly SemaphoreSlim _edgeTtsCompatibilityLock = new SemaphoreSlim(1, 1);
+	private static string _edgeTtsVerifiedCommand = string.Empty;
+
+	private static async Task<bool> EnsureEdgeTtsCompatibleAsync(string executable, string prefixArguments)
+	{
+		string commandKey = executable + "|" + prefixArguments;
+		await _edgeTtsCompatibilityLock.WaitAsync();
+		try
+		{
+			if (string.Equals(_edgeTtsVerifiedCommand, commandKey, StringComparison.OrdinalIgnoreCase)) return true;
+			(string checkOutput, int checkExitCode) = await RunPythonCommandAsync(
+				executable,
+				$"{prefixArguments}-c \"import importlib.metadata as m; print(m.version('edge-tts'))\"",
+				15000);
+			string checkVersionText = checkOutput.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+			if (checkExitCode != 0 || !Version.TryParse(checkVersionText, out Version installedVersion))
+			{
+				Log($"Unable to read installed edge-tts version: {checkOutput.Trim()}");
+				return false;
+			}
+			if (installedVersion >= new Version(7, 3, 1))
+			{
+				_edgeTtsVerifiedCommand = commandKey;
+				return true;
+			}
+
+			Log($"Updating edge-tts {installedVersion} to 7.3.1 or newer for Microsoft's current speech handshake.");
+			(string installOutput, int installExitCode) = await RunPythonCommandAsync(
+				executable,
+				$"{prefixArguments}-m pip install --upgrade \"edge-tts>=7.3.1\"",
+				180000);
+			if (installExitCode != 0)
+			{
+				Log($"Edge TTS update failed: {installOutput.Trim()}");
+				return false;
+			}
+
+			(string updatedOutput, int updatedExitCode) = await RunPythonCommandAsync(
+				executable,
+				$"{prefixArguments}-c \"import importlib.metadata as m; print(m.version('edge-tts'))\"",
+				15000);
+			string updatedVersionText = updatedOutput.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+			if (updatedExitCode == 0 && Version.TryParse(updatedVersionText, out Version updatedVersion) && updatedVersion >= new Version(7, 3, 1))
+			{
+				_edgeTtsVerifiedCommand = commandKey;
+				Log($"Edge TTS updated successfully to {updatedVersion}.");
+				return true;
+			}
+			Log($"Edge TTS update did not reach the required version: {updatedOutput.Trim()}");
+			return false;
+		}
+		catch (Exception ex)
+		{
+			Log($"Unable to verify or update Edge TTS: {ex.Message}");
+			return false;
+		}
+		finally
+		{
+			_edgeTtsCompatibilityLock.Release();
+		}
+	}
+
+	private static async Task<(string output, int exitCode)> RunPythonCommandAsync(string executable, string arguments, int timeoutMs)
+	{
+		using Process process = Process.Start(new ProcessStartInfo
+		{
+			FileName = executable,
+			Arguments = arguments,
+			UseShellExecute = false,
+			CreateNoWindow = true,
+			RedirectStandardError = true,
+			RedirectStandardOutput = true
+		}) ?? throw new InvalidOperationException($"Could not start Python interpreter: {executable}");
+
+		Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+		Task<string> errorTask = process.StandardError.ReadToEndAsync();
+		using CancellationTokenSource timeout = new CancellationTokenSource(timeoutMs);
+		try
+		{
+			await process.WaitForExitAsync(timeout.Token);
+		}
+		catch (OperationCanceledException)
+		{
+			try { process.Kill(true); } catch { }
+			throw new TimeoutException($"Python command exceeded {timeoutMs / 1000} seconds.");
+		}
+		await Task.WhenAll(outputTask, errorTask);
+		string output = outputTask.Result;
+		if (!string.IsNullOrWhiteSpace(errorTask.Result))
+		{
+			output += Environment.NewLine + errorTask.Result;
+		}
+		return (output.Trim(), process.ExitCode);
 	}
 
 	public static async Task<string> BuildPreviewVideoAsync(MainViewModel vm)
@@ -7284,7 +7637,7 @@ del ""%~f0""
 		// Never use an uncompressed WAV here. A failed/incorrectly-timestamped
 		// input can make it grow by tens of gigabytes and fill the system drive.
 		string tempDubAudio = Path.Combine(projectDir, "temp_dub.m4a");
-		double previewDuration = Math.Max(1.0, vm.VideoDurationSec);
+		double previewDuration = Math.Max(1.0, Math.Max(vm.VideoDurationSec, (_lastDialogueAudioEndMs + 250) / 1000.0));
 		List<DialogueLine> list = new List<DialogueLine>();
 		foreach (DialogueLine dialogueLine in vm.DialogueLines)
 		{
@@ -7348,13 +7701,13 @@ del ""%~f0""
 		if (hasRealBgm)
 		{
 			Log("BuildPreviewVideoAsync: Mixing with explicit BGM track and clean Khmer voice: " + text);
-			arguments = $"-y -i \"{videoPath}\" -i \"{text}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=0.30[a_bgm_raw];[2:a]volume=1.0,alimiter=limit=0.98[a_khmer];[a_bgm_raw][a_khmer]amix=inputs=2:normalize=0:duration=first:dropout_transition=0[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			arguments = $"-y -i \"{videoPath}\" -i \"{text}\" -i \"{tempDubAudio}\" -filter_complex \"[1:a]volume=0.30[a_bgm_raw];[2:a]volume=1.0,alimiter=limit=0.98[a_khmer];[a_bgm_raw][a_khmer]amix=inputs=2:normalize=0:duration=longest:dropout_transition=0[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k \"{previewVideo}\"";
 		}
 		else
 		{
 			// Background audio preserved from original movie: Ducked during Khmer speech, audible during pauses so movie is NEVER dead silent!
 			Log("BuildPreviewVideoAsync: Mixing original movie sound (sidechain ducked) with loud Khmer dub dialogue");
-			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -filter_complex \"[0:a]volume=0.28[bg_raw];[1:a]volume=1.0,alimiter=limit=0.98[a_khmer];[bg_raw][a_khmer]sidechaincompress=threshold=0.06:ratio=6:attack=15:release=350[ducked_bg];[ducked_bg][a_khmer]amix=inputs=2:normalize=0:duration=first:dropout_transition=0[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			arguments = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -filter_complex \"[0:a]volume=0.28[bg_raw];[1:a]volume=1.0,alimiter=limit=0.98[a_khmer];[bg_raw][a_khmer]sidechaincompress=threshold=0.06:ratio=6:attack=15:release=350[ducked_bg];[ducked_bg][a_khmer]amix=inputs=2:normalize=0:duration=longest:dropout_transition=0[a_final]\" -map 0:v -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k \"{previewVideo}\"";
 		}
 		ProcessStartInfo startInfo2 = new ProcessStartInfo
 		{
@@ -7373,7 +7726,7 @@ del ""%~f0""
 		if (!File.Exists(previewVideo))
 		{
 			Log("BuildPreviewVideoAsync: Sidechain mux failed or video has no 0:a stream. Falling back to direct dub dialogue mux.");
-			string fallbackArgs = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest \"{previewVideo}\"";
+			string fallbackArgs = $"-y -i \"{videoPath}\" -i \"{tempDubAudio}\" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k \"{previewVideo}\"";
 			ProcessStartInfo fbPsi = new ProcessStartInfo
 			{
 				FileName = ffmpegPath,
@@ -7486,6 +7839,7 @@ del ""%~f0""
 			{
 				if (vm != null)
 				{
+					RefreshDialogueOverlapHighlights(window, vm);
 					btnPreview.IsEnabled = false;
 					btnPreview.Content = "⏳ Updating Video Preview...";
 					try
@@ -7494,11 +7848,31 @@ del ""%~f0""
 					}
 					finally
 					{
+						RefreshDialogueOverlapHighlights(window, vm);
+						UpdateNextOverlapButton(vm);
 						btnPreview.IsEnabled = true;
 					}
 				}
 			};
 			panel.Children.Add(btnPreview);
+			Button btnNextOverlap = new Button
+			{
+				Tag = "ToolbarNextOverlapButton",
+				Content = "Next overlap",
+				ToolTip = "Jump to the next dialogue line whose timing overlaps another line.",
+				Margin = new Thickness(8.0, 0.0, 0.0, 0.0),
+				Padding = new Thickness(10.0, 5.0, 10.0, 5.0),
+				Background = new SolidColorBrush(Color.FromRgb(127, 29, 29)),
+				Foreground = Brushes.White,
+				FontWeight = FontWeights.Bold,
+				FontSize = 11.0,
+				Cursor = Cursors.Hand,
+				IsEnabled = false
+			};
+			_btnNextOverlapRef = btnNextOverlap;
+			btnNextOverlap.Click += (object s, RoutedEventArgs e) => GoToNextDialogueOverlap(window, vm);
+			panel.Children.Add(btnNextOverlap);
+			UpdateNextOverlapButton(vm);
 			_isToolbarInjected = true;
 			Log("Successfully injected Update Preview button into toolbar!");
 			return true;
@@ -11417,19 +11791,14 @@ del ""%~f0""
 
 	private static void EnsureDialogueControls(Window window, MainViewModel vm)
 	{
-		if (_dialogueScrollViewer != null && _dialogueItemsControl != null)
-		{
-			return;
-		}
 		try
 		{
-			foreach (ScrollViewer item in FindAllVisualChildren<ScrollViewer>((DependencyObject)(object)window))
+			if (_dialogueScrollViewer == null || _dialogueItemsControl == null)
 			{
-				ItemsControl itemsControl = FindVisualChild((DependencyObject)(object)item, (ItemsControl i) => true);
-				if (itemsControl != null)
+				foreach (ScrollViewer item in FindAllVisualChildren<ScrollViewer>((DependencyObject)(object)window))
 				{
-					IEnumerable itemsSource = itemsControl.ItemsSource;
-					if (itemsSource != null && itemsSource == vm.DialogueLines)
+					ItemsControl itemsControl = FindVisualChild((DependencyObject)(object)item, (ItemsControl i) => i.ItemsSource != null && i.ItemsSource == vm.DialogueLines);
+					if (itemsControl != null)
 					{
 						_dialogueScrollViewer = item;
 						_dialogueItemsControl = itemsControl;
@@ -11437,10 +11806,249 @@ del ""%~f0""
 					}
 				}
 			}
+			if (_overlapHighlightTimer == null)
+			{
+				_overlapHighlightTimer = new DispatcherTimer(DispatcherPriority.Background, window.Dispatcher)
+				{
+					Interval = TimeSpan.FromMilliseconds(400)
+				};
+				_overlapHighlightTimer.Tick += (s, e) => RefreshDialogueOverlapHighlights(window, vm);
+			}
+			if (!_overlapHighlightTimer.IsEnabled) _overlapHighlightTimer.Start();
+			RefreshDialogueOverlapHighlights(window, vm);
+			UpdateNextOverlapButton(vm);
 		}
 		catch
 		{
 		}
+	}
+
+	private static List<DialogueLine> GetOverlappingDialogueLines(MainViewModel vm)
+	{
+		List<DialogueLine> overlaps = new List<DialogueLine>();
+		if (vm?.DialogueLines == null) return overlaps;
+		List<DialogueLine> lines = vm.DialogueLines
+			.Where(line => line != null && line.EndMs > line.StartMs)
+			.OrderBy(line => line.StartMs)
+			.ThenBy(line => line.EndMs)
+			.ToList();
+		HashSet<DialogueLine> overlappingSet = new HashSet<DialogueLine>();
+		for (int i = 0; i < lines.Count; i++)
+		{
+			for (int j = i + 1; j < lines.Count && lines[j].StartMs < lines[i].EndMs; j++)
+			{
+				if (Math.Max(lines[i].StartMs, lines[j].StartMs) < Math.Min(lines[i].EndMs, lines[j].EndMs))
+				{
+					overlappingSet.Add(lines[i]);
+					overlappingSet.Add(lines[j]);
+				}
+			}
+		}
+		return lines.Where(overlappingSet.Contains).ToList();
+	}
+
+	private static void UpdateNextOverlapButton(MainViewModel vm)
+	{
+		if (_btnNextOverlapRef == null) return;
+		List<DialogueLine> overlaps = GetOverlappingDialogueLines(vm);
+		if (overlaps.Count == 0) _lastOverlapFocusIndex = -1;
+		_btnNextOverlapRef.Content = overlaps.Count > 0 ? $"Next overlap ({overlaps.Count})" : "No overlaps";
+		_btnNextOverlapRef.IsEnabled = overlaps.Count > 0;
+		_btnNextOverlapRef.ToolTip = overlaps.Count > 0
+			? $"Jump to the next of {overlaps.Count} dialogue lines whose timing overlaps another line."
+			: "No dialogue timing overlaps found.";
+	}
+
+	private static void RefreshDialogueOverlapHighlights(Window window, MainViewModel vm)
+	{
+		try
+		{
+			EnsureDialogueTimeEditors(window, vm);
+			foreach (KeyValuePair<Border, (Brush Background, Brush BorderBrush, Thickness BorderThickness)> backup in _overlapBorderBackups.ToList())
+			{
+				Border border = backup.Key;
+				if (border == null) continue;
+				border.Background = backup.Value.Background;
+				border.BorderBrush = backup.Value.BorderBrush;
+				border.BorderThickness = backup.Value.BorderThickness;
+			}
+			_overlapBorderBackups.Clear();
+
+			List<DialogueLine> overlaps = GetOverlappingDialogueLines(vm);
+			if (_dialogueItemsControl != null)
+			{
+				foreach (DialogueLine line in overlaps)
+				{
+					if (_dialogueItemsControl.ItemContainerGenerator.ContainerFromItem(line) is not FrameworkElement container) continue;
+					Border rowBorder = container as Border ?? FindVisualChild((DependencyObject)container, (Border candidate) => true);
+					if (rowBorder == null) continue;
+					_overlapBorderBackups[rowBorder] = (rowBorder.Background, rowBorder.BorderBrush, rowBorder.BorderThickness);
+					rowBorder.Background = new SolidColorBrush(Color.FromArgb(42, 239, 68, 68));
+					rowBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+					rowBorder.BorderThickness = new Thickness(2.0);
+				}
+			}
+			UpdateNextOverlapButton(vm);
+		}
+		catch
+		{
+		}
+	}
+
+	private static void EnsureDialogueTimeEditors(Window window, MainViewModel vm)
+	{
+		if (window == null || vm?.DialogueLines == null || _dialogueItemsControl == null) return;
+		foreach (DialogueLine line in vm.DialogueLines)
+		{
+			if (_dialogueItemsControl.ItemContainerGenerator.ContainerFromItem(line) is not FrameworkElement container) continue;
+			EnsureDialogueTimeEditor(window, vm, container, line, isStart: true);
+			EnsureDialogueTimeEditor(window, vm, container, line, isStart: false);
+		}
+	}
+
+	private static void EnsureDialogueTimeEditor(Window window, MainViewModel vm, FrameworkElement container, DialogueLine line, bool isStart)
+	{
+		string editorTag = isStart ? "DialogueStartTimeEditor" : "DialogueEndTimeEditor";
+		TextBox existing = FindVisualChild((DependencyObject)container, (TextBox candidate) => candidate.Tag as string == editorTag);
+		if (existing != null)
+		{
+			if (!existing.IsKeyboardFocusWithin)
+				existing.Text = FormatEditableDialogueTime(isStart ? line.StartMs : line.EndMs);
+			return;
+		}
+
+		int targetMs = isStart ? line.StartMs : line.EndMs;
+		TextBlock label = FindVisualChild((DependencyObject)container, (TextBlock candidate) =>
+			TryParseDialogueTime(candidate.Text, out int parsedMs) && Math.Abs(parsedMs - targetMs) <= 1);
+		if (label?.Parent is not Panel parent) return;
+
+		TextBox editor = new TextBox
+		{
+			Tag = editorTag,
+			Text = FormatEditableDialogueTime(targetMs),
+			ToolTip = isStart ? "Edit start time (HH:MM:SS.mmm). Press Enter or leave the field to apply." : "Edit end time (HH:MM:SS.mmm). Press Enter or leave the field to apply.",
+			FontFamily = label.FontFamily,
+			FontSize = Math.Max(9, label.FontSize),
+			FontWeight = label.FontWeight,
+			Foreground = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
+			Background = new SolidColorBrush(Color.FromRgb(11, 18, 32)),
+			BorderBrush = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+			BorderThickness = new Thickness(1),
+			CaretBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+			Padding = new Thickness(2, 1, 2, 1),
+			Margin = label.Margin,
+			Width = Math.Max(88, label.ActualWidth),
+			MinWidth = 88,
+			HorizontalAlignment = label.HorizontalAlignment,
+			VerticalAlignment = label.VerticalAlignment,
+			VerticalContentAlignment = VerticalAlignment.Center
+		};
+		Grid.SetRow(editor, Grid.GetRow(label));
+		Grid.SetColumn(editor, Grid.GetColumn(label));
+		Grid.SetRowSpan(editor, Grid.GetRowSpan(label));
+		Grid.SetColumnSpan(editor, Grid.GetColumnSpan(label));
+		DockPanel.SetDock(editor, DockPanel.GetDock(label));
+		Canvas.SetLeft(editor, Canvas.GetLeft(label));
+		Canvas.SetTop(editor, Canvas.GetTop(label));
+		int childIndex = parent.Children.IndexOf(label);
+		parent.Children.RemoveAt(childIndex);
+		parent.Children.Insert(childIndex, editor);
+
+		editor.LostKeyboardFocus += (s, e) => CommitDialogueTimeEditor(editor, vm, isStart);
+		editor.KeyDown += (s, e) =>
+		{
+			if (e.Key == Key.Enter)
+			{
+				CommitDialogueTimeEditor(editor, vm, isStart);
+				Keyboard.ClearFocus();
+				e.Handled = true;
+			}
+			else if (e.Key == Key.Escape)
+			{
+				if (editor.DataContext is DialogueLine currentLine)
+					editor.Text = FormatEditableDialogueTime(isStart ? currentLine.StartMs : currentLine.EndMs);
+				Keyboard.ClearFocus();
+				e.Handled = true;
+			}
+		};
+	}
+
+	private static void CommitDialogueTimeEditor(TextBox editor, MainViewModel vm, bool isStart)
+	{
+		if (editor?.DataContext is not DialogueLine line) return;
+		if (!TryParseDialogueTime(editor.Text, out int requestedMs))
+		{
+			editor.Text = FormatEditableDialogueTime(isStart ? line.StartMs : line.EndMs);
+			vm.ProjectStatusMessage = "Enter time as HH:MM:SS.mmm (for example, 00:02:08.170).";
+			return;
+		}
+		int maxVideoMs = vm.VideoDurationSec > 0 ? (int)Math.Min(int.MaxValue, Math.Round(vm.VideoDurationSec * 1000.0)) : int.MaxValue;
+		if (requestedMs < 0 || requestedMs > maxVideoMs
+			|| (isStart && requestedMs >= line.EndMs)
+			|| (!isStart && requestedMs <= line.StartMs))
+		{
+			editor.Text = FormatEditableDialogueTime(isStart ? line.StartMs : line.EndMs);
+			vm.ProjectStatusMessage = "The time must be within the video and keep the line end after its start.";
+			return;
+		}
+
+		if (isStart)
+		{
+			line.StartMs = requestedMs;
+			line.StartTime = FormatDialogueTime(requestedMs);
+		}
+		else
+		{
+			line.EndMs = requestedMs;
+			line.EndTime = FormatDialogueTime(requestedMs);
+		}
+		editor.Text = FormatEditableDialogueTime(requestedMs);
+		vm.ProjectStatusMessage = $"Dialogue time updated: {FormatEditableDialogueTime(line.StartMs)} - {FormatEditableDialogueTime(line.EndMs)}";
+		RefreshDialogueOverlapHighlights(Application.Current?.MainWindow, vm);
+	}
+
+	private static string FormatEditableDialogueTime(int milliseconds)
+		=> TimeSpan.FromMilliseconds(Math.Max(0, milliseconds)).ToString(@"hh\:mm\:ss\.fff", CultureInfo.InvariantCulture);
+
+	private static string FormatDialogueTime(int milliseconds)
+		=> TimeSpan.FromMilliseconds(Math.Max(0, milliseconds)).ToString(@"hh\:mm\:ss\,fff", CultureInfo.InvariantCulture);
+
+	private static bool TryParseDialogueTime(string text, out int milliseconds)
+	{
+		milliseconds = 0;
+		string value = (text ?? string.Empty).Trim().Replace(',', '.');
+		if (!TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out TimeSpan parsed) || parsed < TimeSpan.Zero || parsed.TotalMilliseconds > int.MaxValue)
+			return false;
+		milliseconds = (int)Math.Round(parsed.TotalMilliseconds);
+		return true;
+	}
+
+	private static void GoToNextDialogueOverlap(Window window, MainViewModel vm)
+	{
+		List<DialogueLine> overlaps = GetOverlappingDialogueLines(vm);
+		if (overlaps.Count == 0) return;
+		_lastOverlapFocusIndex = (_lastOverlapFocusIndex + 1) % overlaps.Count;
+		DialogueLine line = overlaps[_lastOverlapFocusIndex];
+		vm.SelectedDialogueLine = line;
+		ScrollDialogueListToLine(window, vm, line, highlight: false);
+		window.Dispatcher.BeginInvoke((Action)(() =>
+		{
+			try
+			{
+				EnsureDialogueControls(window, vm);
+				if (_dialogueItemsControl?.ItemContainerGenerator.ContainerFromItem(line) is FrameworkElement container)
+				{
+					TextBox editor = FindVisualChild((DependencyObject)container, (TextBox candidate) => candidate.IsVisible && candidate.IsEnabled);
+					if (editor != null)
+					{
+						editor.Focus();
+						Keyboard.Focus(editor);
+					}
+				}
+				RefreshDialogueOverlapHighlights(window, vm);
+			}
+			catch { }
+		}), DispatcherPriority.Loaded);
 	}
 
 	private static void SyncPlaybackFollow(Window window, MainViewModel vm)
@@ -11476,7 +12084,7 @@ del ""%~f0""
 		}
 	}
 
-	private static void ScrollDialogueListToLine(Window window, MainViewModel vm, DialogueLine line)
+	private static void ScrollDialogueListToLine(Window window, MainViewModel vm, DialogueLine line, bool highlight = true)
 	{
 		EnsureDialogueControls(window, vm);
 		if (_dialogueItemsControl == null || _dialogueScrollViewer == null)
@@ -11488,7 +12096,7 @@ del ""%~f0""
 			if (_dialogueItemsControl.ItemContainerGenerator.ContainerFromItem(line) is FrameworkElement frameworkElement)
 			{
 				frameworkElement.BringIntoView();
-				HighlightDialogueRow(frameworkElement);
+				if (highlight) HighlightDialogueRow(frameworkElement);
 				return;
 			}
 			int num = vm.DialogueLines.IndexOf(line);

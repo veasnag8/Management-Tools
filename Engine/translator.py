@@ -14,6 +14,8 @@ import sys
 import json
 import re
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import RLock
 import urllib.parse
 import os
 import tempfile
@@ -142,6 +144,7 @@ class GeminiKeyPool:
         self.last_model_used = ""
         self.genai_module = None
         self.types_module = None
+        self._lock = RLock()
 
         if self.keys:
             try:
@@ -153,60 +156,69 @@ class GeminiKeyPool:
                 sys.stderr.write(f"Failed to import google.genai: {e}\n")
 
     def has_keys(self) -> bool:
-        return len(self.keys) > 0 and len(self.exhausted_keys) < len(self.keys)
+        with self._lock:
+            return len(self.keys) > 0 and len(self.exhausted_keys) < len(self.keys)
 
     def get_client(self) -> Tuple[Any, Any, str]:
-        """Returns (client, types, api_key) or (None, None, '') if exhausted."""
-        if not self.has_keys() or not self.genai_module:
-            return None, None, ""
+        """Returns a round-robin client safely when long-video chunks run concurrently."""
+        with self._lock:
+            if not self.has_keys() or not self.genai_module:
+                return None, None, ""
 
-        active_keys = [k for k in self.keys if k not in self.exhausted_keys]
-        if not active_keys:
-            return None, None, ""
+            active_keys = [k for k in self.keys if k not in self.exhausted_keys]
+            if not active_keys:
+                return None, None, ""
 
-        chosen_key = active_keys[self.current_idx % len(active_keys)]
-        self.current_idx = (self.current_idx + 1) % len(active_keys)
+            chosen_key = active_keys[self.current_idx % len(active_keys)]
+            self.current_idx = (self.current_idx + 1) % len(active_keys)
 
-        if chosen_key not in self.clients:
-            try:
-                self.clients[chosen_key] = self.genai_module.Client(api_key=chosen_key)
-            except Exception as e:
-                sys.stderr.write(f"Failed to initialize Gemini Client for key {chosen_key[:8]}...: {e}\n")
-                self.exhausted_keys.add(chosen_key)
-                return self.get_client()
+            if chosen_key not in self.clients:
+                try:
+                    self.clients[chosen_key] = self.genai_module.Client(api_key=chosen_key)
+                except Exception as e:
+                    self.exhausted_keys.add(chosen_key)
+                    sys.stderr.write(f"Failed to initialize Gemini Client for key {chosen_key[:8]}...: {e}\n")
+                    return self.get_client()
 
-        return self.clients[chosen_key], self.types_module, chosen_key
+            return self.clients[chosen_key], self.types_module, chosen_key
 
     def mark_exhausted(self, key: str, err: Exception) -> None:
-        """Marks a key as quota-exhausted and prints failover notice."""
-        self.exhausted_keys.add(key)
-        masked = key[:6] + "..." + key[-4:] if len(key) > 10 else "***"
-        sys.stderr.write(f"[KeyPool] Key {masked} exhausted quota. Switching to next key in pool ({len(self.keys) - len(self.exhausted_keys)} active left)...\n")
-        if len(self.exhausted_keys) >= len(self.keys):
+        """Marks a quota-exhausted key once, safely across parallel requests."""
+        with self._lock:
+            newly_exhausted = key not in self.exhausted_keys
+            self.exhausted_keys.add(key)
+            all_exhausted = len(self.exhausted_keys) >= len(self.keys)
+            active_left = max(0, len(self.keys) - len(self.exhausted_keys))
+        if newly_exhausted:
+            masked = key[:6] + "..." + key[-4:] if len(key) > 10 else "***"
+            sys.stderr.write(f"[KeyPool] Key {masked} exhausted quota. Switching to next key in pool ({active_left} active left)...\n")
+        if all_exhausted:
             _mark_quota_exhausted(err)
 
     def record_usage(self, response: Any, model_name: str) -> None:
-        """Accumulates prompt, candidate, and total token usage from Gemini response."""
-        self.last_model_used = model_name
+        """Accumulates token usage safely while several chunks finish together."""
         metadata = getattr(response, "usage_metadata", None)
-        if metadata:
-            p_tok = getattr(metadata, "prompt_token_count", 0) or 0
-            c_tok = getattr(metadata, "candidates_token_count", 0) or 0
-            t_tok = getattr(metadata, "total_token_count", 0) or (p_tok + c_tok)
-            self.total_prompt_tokens += p_tok
-            self.total_candidates_tokens += c_tok
-            self.total_tokens += t_tok
+        with self._lock:
+            self.last_model_used = model_name
+            if metadata:
+                p_tok = getattr(metadata, "prompt_token_count", 0) or 0
+                c_tok = getattr(metadata, "candidates_token_count", 0) or 0
+                t_tok = getattr(metadata, "total_token_count", 0) or (p_tok + c_tok)
+                self.total_prompt_tokens += p_tok
+                self.total_candidates_tokens += c_tok
+                self.total_tokens += t_tok
 
     def get_summary(self) -> Dict[str, Any]:
-        return {
-            "total_tokens": self.total_tokens,
-            "prompt_tokens": self.total_prompt_tokens,
-            "completion_tokens": self.total_candidates_tokens,
-            "total_keys": len(self.keys),
-            "exhausted_keys": len(self.exhausted_keys),
-            "active_keys": len(self.keys) - len(self.exhausted_keys),
-            "last_model_used": self.last_model_used
-        }
+        with self._lock:
+            return {
+                "total_tokens": self.total_tokens,
+                "prompt_tokens": self.total_prompt_tokens,
+                "completion_tokens": self.total_candidates_tokens,
+                "total_keys": len(self.keys),
+                "exhausted_keys": len(self.exhausted_keys),
+                "active_keys": len(self.keys) - len(self.exhausted_keys),
+                "last_model_used": self.last_model_used
+            }
 
 def free_translate_zh_to_km(text: str) -> str:
     """Translates Chinese text into Khmer using Google Translate web service as fallback."""
@@ -226,11 +238,19 @@ def free_translate_zh_to_km(text: str) -> str:
     return ""
 
 def free_translate_batch(chinese_texts: List[str]) -> List[str]:
-    """Translates a batch of Chinese texts into Khmer."""
-    results = []
-    for t in chinese_texts:
-        res = free_translate_zh_to_km(t)
-        results.append(res if res else t)
+    """Translates fallback lines concurrently while preserving their original order."""
+    if not chinese_texts:
+        return []
+    results = [""] * len(chinese_texts)
+    workers = min(8, len(chinese_texts))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(free_translate_zh_to_km, text): index for index, text in enumerate(chinese_texts)}
+        for future in as_completed(futures):
+            index = futures[future]
+            try:
+                results[index] = future.result() or chinese_texts[index]
+            except Exception:
+                results[index] = chinese_texts[index]
     return results
 
 def _extract_json_array(text: str) -> List[Dict[str, Any]]:
@@ -363,10 +383,27 @@ def translate_dialogue_batch(
 
     if pool.has_keys():
         sys.stderr.write(f"[KeyPool] Translating {len(dialogue_items)} lines using {len(pool.keys)} Gemini API keys in pool...\n")
-        for offset in range(0, len(dialogue_items), CHUNK_SIZE):
-            chunk = dialogue_items[offset:offset + CHUNK_SIZE]
-            chunk_results = _translate_chunk_with_pool(chunk, pool, movie_context, model_name)
-            gemini_map.update(chunk_results)
+        chunks = [
+            (offset, dialogue_items[offset:offset + CHUNK_SIZE])
+            for offset in range(0, len(dialogue_items), CHUNK_SIZE)
+        ]
+        # Spread requests across configured API keys; a single key stays serialized
+        # to avoid bursts that trigger quota throttling.
+        max_workers = min(4, len(chunks), max(1, len(pool.keys)))
+        if max_workers <= 1:
+            for _, chunk in chunks:
+                gemini_map.update(_translate_chunk_with_pool(chunk, pool, movie_context, model_name))
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(_translate_chunk_with_pool, chunk, pool, movie_context, model_name): offset
+                    for offset, chunk in chunks
+                }
+                for future in as_completed(futures):
+                    try:
+                        gemini_map.update(future.result())
+                    except Exception as exc:
+                        sys.stderr.write(f"Gemini translation chunk failed: {exc}\n")
     else:
         sys.stderr.write("[KeyPool] No active Gemini keys in pool. Using high-accuracy Khmer web fallback.\n")
 

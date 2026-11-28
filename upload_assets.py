@@ -1,106 +1,158 @@
-import os
-import sys
+import argparse
+import hashlib
 import json
-import urllib.request
+import os
 import subprocess
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
 
-def get_git_token():
-    p = subprocess.Popen(['git', 'credential', 'fill'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-    out, _ = p.communicate('protocol=https\nhost=github.com\n\n')
-    for line in out.splitlines():
-        if line.startswith('password='):
-            return line.split('=', 1)[1]
-    raise RuntimeError("GitHub token not found in git credential manager")
 
-def get_or_create_release(tag, name, base_headers):
-    # Check if release exists
-    req = urllib.request.Request('https://api.github.com/repos/veasnag8/Management-Tools/releases', headers=base_headers)
-    with urllib.request.urlopen(req) as resp:
-        releases = json.loads(resp.read().decode('utf-8'))
-        for r in releases:
-            if r.get('tag_name') == tag:
-                print(f"Found existing release for {tag} (ID: {r['id']})")
-                return r['id']
+REPOSITORY = "veasnag8/Management-Tools"
+API_ROOT = f"https://api.github.com/repos/{REPOSITORY}"
 
-    # Create new release
-    print(f"Creating new GitHub release for {tag} ({name})...")
-    create_url = 'https://api.github.com/repos/veasnag8/Management-Tools/releases'
-    payload = json.dumps({
-        'tag_name': tag,
-        'target_commitish': 'main',
-        'name': name,
-        'body': f'Tool Dubber Release {tag}',
-        'draft': False,
-        'prerelease': False
-    }).encode('utf-8')
-    create_headers = dict(base_headers)
-    create_headers['Content-Type'] = 'application/json'
-    create_req = urllib.request.Request(create_url, data=payload, headers=create_headers, method='POST')
-    with urllib.request.urlopen(create_req) as resp:
-        res = json.loads(resp.read().decode('utf-8'))
-        print(f"Created release ID: {res['id']}")
-        return res['id']
 
-def main():
+def get_git_token() -> str:
+    process = subprocess.Popen(
+        ["git", "credential", "fill"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    output, _ = process.communicate("protocol=https\nhost=github.com\n\n")
+    if process.returncode != 0:
+        raise RuntimeError("Unable to query the GitHub credential manager")
+    for line in output.splitlines():
+        if line.startswith("password="):
+            return line.split("=", 1)[1]
+    raise RuntimeError("GitHub credentials were not found in the credential manager")
+
+
+def request_json(url: str, headers: dict, data: bytes = None) -> dict:
+    request_headers = dict(headers)
+    if data is not None:
+        request_headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=request_headers)
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def get_or_create_release(tag: str, version: str, headers: dict) -> dict:
+    tag_url = f"{API_ROOT}/releases/tags/{urllib.parse.quote(tag, safe='')}"
+    try:
+        return request_json(tag_url, headers)
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+
+    payload = json.dumps(
+        {
+            "tag_name": tag,
+            "target_commitish": "main",
+            "name": f"Tool Dubber v{version}",
+            "body": (
+                "Highlights overlapping dialogue lines in red, allows direct "
+                "start/end time editing, and adds a Next overlap button to jump "
+                "between affected lines. Removes the Gemini Keys buttons. Also "
+                "includes elapsed processing time and translation/Khmer voice "
+                "generation improvements. Includes the full installer and fast "
+                "patch for existing installations."
+            ),
+            "draft": False,
+            "prerelease": False,
+        }
+    ).encode("utf-8")
+    return request_json(f"{API_ROOT}/releases", headers, payload)
+
+
+def upload_asset(release: dict, asset_path: Path, headers: dict) -> None:
+    asset_name = asset_path.name
+    content = asset_path.read_bytes()
+    digest = hashlib.sha256(content).hexdigest()
+
+    existing = next(
+        (asset for asset in release.get("assets", []) if asset["name"] == asset_name),
+        None,
+    )
+    if existing:
+        if existing.get("digest") == f"sha256:{digest}" and existing.get("size") == len(content):
+            print(f"Already uploaded and verified: {asset_name}")
+            return
+        raise RuntimeError(
+            f"Release already has a different {asset_name}; remove or inspect it manually."
+        )
+
+    upload_url = (
+        f"https://uploads.github.com/repos/{REPOSITORY}/releases/"
+        f"{release['id']}/assets?name={urllib.parse.quote(asset_name)}"
+    )
+    upload_headers = dict(headers)
+    upload_headers["Content-Type"] = (
+        "application/zip" if asset_path.suffix.lower() == ".zip" else "application/octet-stream"
+    )
+    upload_headers["Content-Length"] = str(len(content))
+    print(f"Uploading {asset_name} ({len(content)} bytes)...", flush=True)
+    request = urllib.request.Request(
+        upload_url,
+        data=content,
+        headers=upload_headers,
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=3600) as response:
+        uploaded = json.loads(response.read().decode("utf-8"))
+    if uploaded.get("digest") != f"sha256:{digest}" or uploaded.get("size") != len(content):
+        raise RuntimeError(f"GitHub asset verification failed for {asset_name}")
+    print(f"Uploaded and verified: {asset_name}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Publish Tool Dubber release assets.")
+    parser.add_argument(
+        "--release-dir",
+        default=r"C:\VEASNA\Release",
+        help="Directory containing the generated setup EXE and patch ZIP.",
+    )
+    args = parser.parse_args()
+
+    manifest_path = Path(__file__).with_name("version.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    version = manifest["latest_version"]
+    tag = f"v{version}"
+    release_dir = Path(args.release_dir)
+    assets = [
+        release_dir / f"ToolDubber-Patch-v{version}.zip",
+        release_dir / f"ToolDubber-Setup-v{version}.exe",
+    ]
+    for asset in assets:
+        if not asset.is_file():
+            raise FileNotFoundError(f"Release asset was not found: {asset}")
+
     token = get_git_token()
-    tag = "v2.1.6"
-    name = "Tool Dubber v2.1.6"
-    base_headers = {
-        'Authorization': f'token {token}',
-        'User-Agent': 'ToolDubber-Release'
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "ToolDubber-Release",
+        "X-GitHub-Api-Version": "2022-11-28",
     }
+    release = get_or_create_release(tag, version, headers)
+    if release.get("tag_name") != tag:
+        raise RuntimeError(f"Expected release tag {tag}, got {release.get('tag_name')}")
 
-    release_id = get_or_create_release(tag, name, base_headers)
+    for asset in assets:
+        upload_asset(release, asset, headers)
 
-    print(f"Checking existing assets for release {release_id}...")
-    req = urllib.request.Request(f'https://api.github.com/repos/veasnag8/Management-Tools/releases/{release_id}', headers=base_headers)
-    with urllib.request.urlopen(req) as resp:
-        data = json.loads(resp.read().decode('utf-8'))
-        for a in data.get('assets', []):
-            print(f"Deleting previous asset: {a['name']} (ID: {a['id']})...")
-            del_req = urllib.request.Request(
-                f"https://api.github.com/repos/veasnag8/Management-Tools/releases/assets/{a['id']}",
-                headers=base_headers,
-                method='DELETE'
-            )
-            urllib.request.urlopen(del_req)
-            print("Deleted.")
+    verified = request_json(f"{API_ROOT}/releases/{release['id']}", headers)
+    for asset in assets:
+        uploaded = next(
+            (item for item in verified.get("assets", []) if item["name"] == asset.name),
+            None,
+        )
+        if uploaded is None or uploaded.get("state") != "uploaded":
+            raise RuntimeError(f"GitHub release is missing uploaded asset {asset.name}")
+    print(f"Release assets are live: {verified['html_url']}")
 
-    # 1. Upload Patch ZIP
-    patch_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Patch-v2.1.6.zip'
-    patch_size = os.path.getsize(patch_path)
-    print(f"\nUploading Patch: {patch_path} ({patch_size} bytes)...")
-    with open(patch_path, 'rb') as f:
-        patch_data = f.read()
 
-    patch_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Patch-v2.1.6.zip"
-    patch_headers = dict(base_headers)
-    patch_headers['Content-Type'] = 'application/zip'
-    patch_headers['Content-Length'] = str(patch_size)
-
-    req_patch = urllib.request.Request(patch_url, data=patch_data, headers=patch_headers, method='POST')
-    with urllib.request.urlopen(req_patch) as resp:
-        res = json.loads(resp.read().decode('utf-8'))
-        print(f"✓ Patch uploaded successfully: {res.get('browser_download_url')} (size: {res.get('size')})")
-
-    # 2. Upload Setup EXE
-    setup_path = r'D:\Project\Release_v1.2.0\Output\ToolDubber-Setup-v2.1.6.exe'
-    setup_size = os.path.getsize(setup_path)
-    print(f"\nUploading Setup EXE: {setup_path} ({setup_size} bytes)... This may take 1-2 minutes.")
-    with open(setup_path, 'rb') as f:
-        setup_data = f.read()
-
-    setup_url = f"https://uploads.github.com/repos/veasnag8/Management-Tools/releases/{release_id}/assets?name=ToolDubber-Setup-v2.1.6.exe"
-    setup_headers = dict(base_headers)
-    setup_headers['Content-Type'] = 'application/octet-stream'
-    setup_headers['Content-Length'] = str(setup_size)
-
-    req_setup = urllib.request.Request(setup_url, data=setup_data, headers=setup_headers, method='POST')
-    with urllib.request.urlopen(req_setup, timeout=300) as resp:
-        res = json.loads(resp.read().decode('utf-8'))
-        print(f"✓ Setup uploaded successfully: {res.get('browser_download_url')} (size: {res.get('size')})")
-
-    print(f"\nAll assets for {tag} successfully uploaded and verified on GitHub!")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

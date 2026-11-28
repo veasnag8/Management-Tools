@@ -28,10 +28,12 @@ async def _synthesize_tier(
     output_path: str,
     voice_name: str,
     options: Dict[str, str],
-    tier_name: str
+    tier_name: str,
+    errors: Optional[List[str]] = None
 ) -> bool:
-    """Retry transient Edge TTS failures without accepting a partial audio file."""
-    for attempt in range(2):
+    """Retry transient Edge TTS failures with backoff; discard partial audio."""
+    retry_delays = (0.75, 1.5, 3.0)
+    for attempt in range(len(retry_delays) + 1):
         try:
             if os.path.exists(output_path):
                 os.remove(output_path)
@@ -41,13 +43,16 @@ async def _synthesize_tier(
                 return True
             raise RuntimeError("Edge TTS returned without a usable audio file")
         except Exception as error:
+            if errors is not None:
+                errors.append(f"{voice_name}: {error}")
             if os.path.exists(output_path):
                 os.remove(output_path)
             sys.stderr.write(
-                f"Edge TTS {tier_name} attempt {attempt + 1}/2 failed for {voice_name}: {error}\n"
+                f"Edge TTS {tier_name} attempt {attempt + 1}/{len(retry_delays) + 1} "
+                f"failed for {voice_name}: {error}\n"
             )
-            if attempt == 0:
-                await asyncio.sleep(0.5)
+            if attempt < len(retry_delays):
+                await asyncio.sleep(retry_delays[attempt])
     return False
 
 def resolve_voice(voice_id: str) -> str:
@@ -66,13 +71,14 @@ async def _synthesize_async(
     rate: str = "+0%",
     volume: str = "+0%",
     pitch: str = "+0Hz"
-) -> bool:
+) -> tuple[bool, str]:
     """Async generation with edge-tts with resilient multi-tier fallback."""
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     clean_text = (text or "").strip()
     if not clean_text:
-        return False
+        return False, "Empty text"
 
+    errors: List[str] = []
     is_female = "sreymom" in voice_name.lower() or "female" in voice_name.lower()
 
     # Tier 1: Try requested voice with rate.
@@ -85,13 +91,14 @@ async def _synthesize_async(
         output_path,
         voice_name,
         {"rate": rate, "volume": eff_volume, "pitch": eff_pitch},
-        "configured-voice"
+        "configured-voice",
+        errors
     ):
-        return True
+        return True, ""
 
     # Tier 2: Try pure clean call without rate/pitch/volume
-    if await _synthesize_tier(clean_text, output_path, voice_name, {}, "default-options"):
-        return True
+    if await _synthesize_tier(clean_text, output_path, voice_name, {}, "default-options", errors):
+        return True, ""
 
     # Tier 3: If female voice failed on server, fallback to male voice so dialogue is NEVER missing!
     if is_female:
@@ -101,11 +108,13 @@ async def _synthesize_async(
             output_path,
             "km-KH-PisethNeural",
             {"rate": rate},
-            "male-voice-fallback"
+            "male-voice-fallback",
+            errors
         ):
-            return True
+            return True, ""
 
-    return False
+    last_error = errors[-1] if errors else "No error details were returned"
+    return False, f"All Edge TTS attempts failed for {voice_name}. Last error: {last_error}"
 
 def get_audio_duration_ms(file_path: str) -> int:
     """Retrieves audio duration in milliseconds using ffprobe."""
@@ -207,7 +216,7 @@ def synthesize_sentence(
     pitch_str = f"{'+' if effective_pitch >= 0 else ''}{effective_pitch}Hz"
 
     try:
-        ok = asyncio.run(_synthesize_async(
+        ok, synthesis_error = asyncio.run(_synthesize_async(
             text=clean_text,
             output_path=output_path,
             voice_name=voice_tag,
@@ -242,7 +251,8 @@ def synthesize_sentence(
             "success": ok,
             "output_path": output_path,
             "voice": voice_tag,
-            "duration_ms": duration_ms
+            "duration_ms": duration_ms,
+            **({"error": synthesis_error} if not ok else {})
         }
     except Exception as e:
         return {
