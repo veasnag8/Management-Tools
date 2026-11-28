@@ -1,13 +1,13 @@
 {
     "product":  "SNA_DUBBER",
     "has_update":  true,
-    "latest_version":  "2.2.10",
-    "download_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.10/ToolDubber-Setup-v2.2.10.exe",
-    "patch_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.10/ToolDubber-Patch-v2.2.10.zip",
-    "patch_sha256":  "137bc068951767703739f0ea109c71829c0487d5c3ecc3a181a5b338840c185e",
-    "patch_size_bytes":  1804009,
+    "latest_version":  "2.2.11",
+    "download_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.11/ToolDubber-Setup-v2.2.11.exe",
+    "patch_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.11/ToolDubber-Patch-v2.2.11.zip",
+    "patch_sha256":  "81c83f96273463e625a2f912ceaa5cb51c8873c27b905231cbb9cac069a72656",
+    "patch_size_bytes":  1806624,
     "min_patch_version":  "2.0.0",
-    "release_notes":  "Version 2.2.10: Fixes an unexpected app close during translation caused by text-layer UI elements being repeatedly attached until a layout stack overflow. Also fixes the no-overlap status button styling, Srey Mom voice changes, overlap highlighting and navigation, start/end time editing, and removes Gemini Keys buttons.",
-    "sha256":  "1dab6798e372f7e8b9841e7e251f1a7f74e19a130c38c4f1373fd9a62942669d",
+    "release_notes":  "Version 2.2.11: Cancelling video export with X now stops its FFmpeg process, waits for it to exit, and deletes the incomplete output so a later export starts cleanly. Also fixes text-layer layout stack overflow that could close the app during translation, Srey Mom voice changes, overlap highlighting and navigation, start/end time editing, and removes Gemini Keys buttons.",
+    "sha256":  "50ec8e2e389757251435c9a78674646e2b3be006754725a59f4f39bf00fa48fe",
     "mandatory":  false
 }
