@@ -53,13 +53,12 @@ def get_or_create_release(tag: str, version: str, headers: dict) -> dict:
             "target_commitish": "main",
             "name": f"Tool Dubber v{version}",
             "body": (
-                "Fixes Srey Mom voice changes by regenerating cached dialogue "
-                "audio with the selected voice, preserves the chosen voice "
-                "instead of silently switching to Piset, and reports synthesis "
-                "failures. Also highlights/navigates overlapping dialogue, "
-                "allows start/end time editing, removes Gemini Keys buttons, "
-                "and includes processing-time and translation improvements. "
-                "Includes the full installer and fast patch for existing installs."
+                "Fixes no-overlap status button styling: dark when idle and red "
+                "when overlaps are found. Also fixes Srey Mom voice changes by "
+                "regenerating cached audio with the selected voice; highlights "
+                "and navigates overlapping dialogue; allows start/end time "
+                "editing; and removes Gemini Keys buttons. Includes the full "
+                "installer and fast patch for existing installations."
             ),
             "draft": False,
             "prerelease": False,

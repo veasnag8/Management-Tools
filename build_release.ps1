@@ -123,7 +123,7 @@ try {
     $manifest.patch_sha256 = $patchHash
     $manifest.patch_size_bytes = $patchSize
     $manifest.sha256 = $installerHash
-    $manifest.release_notes = "Version ${appVersion}: Fixes Srey Mom voice changes by regenerating cached dialogue audio with the selected voice, preserves the chosen voice instead of silently switching to Piset, and reports synthesis failures. Also highlights and navigates overlapping dialogue, allows start/end time editing, removes Gemini Keys buttons, and includes processing-time and translation improvements."
+    $manifest.release_notes = "Version ${appVersion}: Fixes the no-overlap status button styling; it stays dark when idle and turns red when overlaps are found. Also fixes Srey Mom voice changes by regenerating cached audio with the selected voice, highlights and navigates overlapping dialogue, allows start/end time editing, and removes Gemini Keys buttons."
     $manifestJson = $manifest | ConvertTo-Json -Depth 10
     [System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.UTF8Encoding]::new($false))
 

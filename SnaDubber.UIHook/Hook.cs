@@ -11953,9 +11953,18 @@ del ""%~f0""
 	{
 		if (_btnNextOverlapRef == null) return;
 		List<DialogueLine> overlaps = GetOverlappingDialogueLines(vm);
-		if (overlaps.Count == 0) _lastOverlapFocusIndex = -1;
-		_btnNextOverlapRef.Content = overlaps.Count > 0 ? $"Next overlap ({overlaps.Count})" : "No overlaps";
-		_btnNextOverlapRef.IsEnabled = overlaps.Count > 0;
+		bool hasOverlaps = overlaps.Count > 0;
+		if (!hasOverlaps) _lastOverlapFocusIndex = -1;
+		_btnNextOverlapRef.Content = hasOverlaps ? $"Next overlap ({overlaps.Count})" : "No overlaps";
+		// Keep the no-overlap state enabled so WPF does not apply the app's bright
+		// disabled-button theme. It remains a muted, non-actionable status badge.
+		_btnNextOverlapRef.IsEnabled = true;
+		_btnNextOverlapRef.Focusable = hasOverlaps;
+		_btnNextOverlapRef.Cursor = hasOverlaps ? Cursors.Hand : Cursors.Arrow;
+		_btnNextOverlapRef.Background = new SolidColorBrush(hasOverlaps ? Color.FromRgb(127, 29, 29) : Color.FromRgb(30, 41, 59));
+		_btnNextOverlapRef.Foreground = new SolidColorBrush(hasOverlaps ? Colors.White : Color.FromRgb(148, 163, 184));
+		_btnNextOverlapRef.BorderBrush = new SolidColorBrush(hasOverlaps ? Color.FromRgb(239, 68, 68) : Color.FromRgb(51, 65, 85));
+		_btnNextOverlapRef.BorderThickness = new Thickness(1);
 		_btnNextOverlapRef.ToolTip = overlaps.Count > 0
 			? $"Jump to the next of {overlaps.Count} dialogue lines whose timing overlaps another line."
 			: "No dialogue timing overlaps found.";
