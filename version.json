@@ -1,13 +1,13 @@
 {
-  "product": "SNA_DUBBER",
-  "has_update": true,
-  "latest_version": "2.2.2",
-  "download_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.2/ToolDubber-Setup-v2.2.2.exe",
-  "patch_url": "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.2/ToolDubber-Patch-v2.2.2.zip",
-  "patch_sha256": "fccd9dead7af9986a53df8ed267f8ee29001ea134bf00bea1623bf21adfaacd8",
-  "patch_size_bytes": 1874833,
-  "min_patch_version": "2.0.0",
-  "release_notes": "Version 2.2.2: Reduces Gemini token use while preserving story context. Requires a complete translation for every dialogue line; stops before voice generation/export if dialogue remains untranslated.",
-  "sha256": "b81de8ad2040cad60cd2e9eb042b8333cbf1fb548b1d2fe2cd5cc971ce6dacb0",
-  "mandatory": false
+    "product":  "SNA_DUBBER",
+    "has_update":  true,
+    "latest_version":  "2.2.7",
+    "download_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.7/ToolDubber-Setup-v2.2.7.exe",
+    "patch_url":  "https://github.com/veasnag8/Management-Tools/releases/download/v2.2.7/ToolDubber-Patch-v2.2.7.zip",
+    "patch_sha256":  "b5c4c78c9dc53d1885546454c6e0601254472ca90d3793cf21ef716510828c68",
+    "patch_size_bytes":  1801580,
+    "min_patch_version":  "2.0.0",
+    "release_notes":  "Version 2.2.7: Highlights overlapping dialogue lines in red, allows direct start/end time editing, and adds a Next overlap button to jump to each line for editing; removes the warning as soon as timings no longer overlap. Removes the Gemini Keys buttons. Also adds elapsed processing time and improves translation and Khmer voice generation.",
+    "sha256":  "12c9db69902a1c135bea03e5e210eee1564da06cb983f44b33f54265b3f80087",
+    "mandatory":  false
 }
